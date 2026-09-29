@@ -31,8 +31,8 @@ export async function generateAiText(mode: AiMode, context: string) {
     const client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     const instructions: Record<AiMode, string> = {
       bio: "Tulis satu bio profil pertemanan berbahasa Indonesia, natural, hangat, spesifik, maksimal 55 kata. Jangan terdengar seperti iklan atau AI.",
-      icebreaker: "Buat tepat 3 pembuka percakapan berbahasa Indonesia berdasarkan profil. Hangat, tidak genit, tidak klise. Satu baris per opsi tanpa nomor.",
-      replies: "Buat tepat 3 opsi balasan chat platonic berbahasa Indonesia berdasarkan konteks. Natural dan ringkas. Satu baris per opsi tanpa nomor.",
+      icebreaker: "Buat tepat 3 pembuka percakapan berbahasa Indonesia berdasarkan kedua profil, MBTI sebagai preferensi komunikasi, dan minat nyata. Hangat, platonic, spesifik, tidak genit, tanpa stereotip tipe. Satu baris per opsi tanpa nomor.",
+      replies: "Buat tepat 3 opsi balasan chat platonic berbahasa Indonesia berdasarkan percakapan serta MBTI kedua orang sebagai petunjuk gaya komunikasi, bukan penentu hubungan. Natural, spesifik, ringkas. Satu baris per opsi tanpa nomor.",
     };
     const request = {
       contents: context.slice(0, 4000),

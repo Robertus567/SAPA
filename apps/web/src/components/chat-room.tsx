@@ -25,6 +25,7 @@ export function ChatRoom({ conversationId }: { conversationId: string }) {
   const [sending, setSending] = useState(false);
   const [notice, setNotice] = useState("");
   const [viewerId, setViewerId] = useState("");
+  const [viewerMbti, setViewerMbti] = useState("");
   const [peer, setPeer] = useState<ChatPeer>({ userId: "", matchId: "", fullName: "Memuat percakapan…", mbti: "", photoUrl: "/people/default.svg" });
   const [safetyOpen, setSafetyOpen] = useState(false);
   const [replying, setReplying] = useState<ChatMessage | null>(null);
@@ -57,6 +58,7 @@ export function ChatRoom({ conversationId }: { conversationId: string }) {
           return item.id === next.id && item.readAt === next.readAt && item.deletedAt === next.deletedAt && item.body === next.body && item.replyTo?.deletedAt === next.replyTo?.deletedAt;
         }) ? current : data.messages);
         if (data.currentUserId) setViewerId(data.currentUserId);
+        if (data.currentUserMbti) setViewerMbti(data.currentUserMbti);
         if (data.peer) setPeer((current) => current.userId === data.peer.userId && current.fullName === data.peer.fullName && current.photoUrl === data.peer.photoUrl && current.mbti === data.peer.mbti ? current : data.peer);
       } else if (!response.ok) setNotice(data.error || "Percakapan gagal dimuat.");
     } catch { setNotice("Koneksi terputus. Mencoba lagi…"); }
@@ -80,7 +82,7 @@ export function ChatRoom({ conversationId }: { conversationId: string }) {
       const draft = new URLSearchParams(window.location.search).get("draft");
       if (draft) setText(draft);
     }, 0);
-    const timer = window.setInterval(() => { void loadMessages(); void loadMatches(); }, 5000);
+    const timer = window.setInterval(() => { if (document.visibilityState === "visible") { void loadMessages(); void loadMatches(); } }, 2000);
     return () => { window.clearTimeout(kickoff); window.clearInterval(timer); clearLongPress(); };
   }, [conversationId, loadMessages, loadMatches]);
   useEffect(() => {
@@ -140,7 +142,8 @@ export function ChatRoom({ conversationId }: { conversationId: string }) {
 
   async function askGemini() {
     setAiBusy(true); setNotice("");
-    const context = messages.length ? messages.slice(-6).map((message) => `${message.senderId === peer.userId ? peer.fullName : "Aku"}: ${message.body}`).join("\n") : `Aku baru match dengan ${peer.fullName}. Bantu tulis sapaan pertama yang hangat.`;
+    const conversation = messages.length ? messages.filter((message) => !message.deletedAt).slice(-6).map((message) => `${message.senderId === peer.userId ? peer.fullName : "Aku"}: ${message.body}`).join("\n") : "Belum ada pesan.";
+    const context = `Aku bertipe ${viewerMbti || "MBTI belum diketahui"}; ${peer.fullName} bertipe ${peer.mbti}. Buat tiga ide balasan pertemanan yang cocok dengan cara kedua tipe ini berkomunikasi tanpa menganggap MBTI menentukan hubungan. Hindari stereotip; gunakan konteks percakapan berikut:\n${conversation}`;
     try {
       const response = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "replies", context }) });
       const data = await response.json();
@@ -177,7 +180,7 @@ export function ChatRoom({ conversationId }: { conversationId: string }) {
         {suggestions.length > 0 && <div className="suggestion-box"><span><Sparkles size={15} /> Saran Gemini</span>{suggestions.map((suggestion) => <button key={suggestion} onClick={() => { setText(suggestion); setSuggestions([]); }}>{suggestion}</button>)}</div>}
         <div ref={endRef} />
       </div>
-      <div className="composer-wrap">{notice && <div className="chat-notice"><ShieldAlert size={15} /> {notice}</div>}{replying && <div className="reply-preview"><Reply size={16} /><div><strong>Balas {replying.senderId === viewerId ? "pesanmu" : peer.fullName}</strong><span>{replying.deletedAt ? "Pesan ini telah dihapus" : replying.body || (replying.imageUrl ? "Foto" : "")}</span></div><button type="button" onClick={() => setReplying(null)} aria-label="Batal membalas"><X size={17} /></button></div>}{imageUrl && <div className="image-preview"><img src={imageUrl} alt="Preview" /><button onClick={() => setImageUrl(null)}>×</button></div>}<form className="composer" onSubmit={send}><label className="attach-button"><ImagePlus /><input type="file" accept="image/png,image/jpeg,image/webp" onChange={chooseImage} /></label><textarea ref={composerRef} value={text} onChange={(event) => setText(event.target.value)} placeholder={replying ? "Tulis balasanmu..." : "Tulis pesan yang tulus..."} rows={1} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} /><button type="button" className="ai-button" onClick={askGemini} disabled={aiBusy}><Sparkles /> {aiBusy ? "berpikir" : "Bantu balas"}</button><button className="send-button" disabled={sending}><Send /></button></form><p>Tahan atau klik kanan pesan untuk balas/hapus · Enter untuk kirim</p></div>
+      <div className="composer-wrap">{notice && <div className="chat-notice"><ShieldAlert size={15} /> {notice}</div>}{replying && <div className="reply-preview"><Reply size={16} /><div><strong>Balas {replying.senderId === viewerId ? "pesanmu" : peer.fullName}</strong><span>{replying.deletedAt ? "Pesan ini telah dihapus" : replying.body || (replying.imageUrl ? "Foto" : "")}</span></div><button type="button" onClick={() => setReplying(null)} aria-label="Batal membalas"><X size={17} /></button></div>}{imageUrl && <div className="image-preview"><img src={imageUrl} alt="Preview" /><button onClick={() => setImageUrl(null)}>×</button></div>}<form className="composer" onSubmit={send}><label className="attach-button"><ImagePlus /><input type="file" accept="image/png,image/jpeg,image/webp" onChange={chooseImage} /></label><textarea ref={composerRef} value={text} onChange={(event) => setText(event.target.value)} placeholder={replying ? "Balas pesan..." : "Tulis pesan..."} rows={1} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} /><button type="button" className="ai-button" onClick={askGemini} disabled={aiBusy}><Sparkles /> {aiBusy ? "berpikir" : "Bantu balas"}</button><button className="send-button" disabled={sending}><Send /></button></form><p>Tahan atau klik kanan pesan untuk balas/hapus · Enter untuk kirim</p></div>
     </section>
   </main>;
 }

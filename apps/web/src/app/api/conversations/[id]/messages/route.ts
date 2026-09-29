@@ -35,10 +35,11 @@ async function assertMember(sql: ReturnType<typeof db>, conversationId: string, 
 
 async function conversationDetails(sql: ReturnType<typeof db>, conversationId: string, userId: string) {
   const rows = await sql`
-    SELECT m.id AS match_id, p.user_id, p.full_name, p.mbti, p.photo_url
+    SELECT m.id AS match_id, p.user_id, p.full_name, p.mbti, p.photo_url, viewer.mbti AS viewer_mbti
     FROM conversations c
     JOIN matches m ON m.id=c.match_id
     JOIN profiles p ON p.user_id=CASE WHEN m.user_a=${userId} THEN m.user_b ELSE m.user_a END
+    JOIN profiles viewer ON viewer.user_id=${userId}
     WHERE c.id=${conversationId} AND m.is_active=TRUE
       AND (m.user_a=${userId} OR m.user_b=${userId})
     LIMIT 1
@@ -65,7 +66,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       ) m LEFT JOIN messages r ON r.id=m.reply_to_message_id
       ORDER BY m.created_at ASC, m.id ASC
     `;
-    return Response.json({ messages: rows.map(rowToMessage), currentUserId: user.id, peer: { userId: String(details.user_id), matchId: String(details.match_id), fullName: String(details.full_name), mbti: String(details.mbti), photoUrl: String(details.photo_url) } });
+    return Response.json({ messages: rows.map(rowToMessage), currentUserId: user.id, currentUserMbti: String(details.viewer_mbti), peer: { userId: String(details.user_id), matchId: String(details.match_id), fullName: String(details.full_name), mbti: String(details.mbti), photoUrl: String(details.photo_url) } });
   } catch (error) {
     if ((error as Error).message === "UNAUTHORIZED") return Response.json({ error: "Silakan masuk." }, { status: 401 });
     return apiError(error);

@@ -28,13 +28,14 @@ class _ChatScreenState extends State<ChatScreen> {
   String? lastSnapshot;
   String? lastLoadError;
   String viewerPhoto = '/people/default.svg';
+  String viewerMbti = '';
 
   @override
   void initState() {
     super.initState();
     load();
-    ApiService.instance.profile().then((value) { if (mounted) setState(() => viewerPhoto = value?.photoUrl ?? '/people/default.svg'); }).catchError((_) {});
-    timer = Timer.periodic(const Duration(seconds: 5), (_) => load());
+    ApiService.instance.profile().then((value) { if (mounted) setState(() { viewerPhoto = value?.photoUrl ?? '/people/default.svg'; viewerMbti = value?.mbti ?? ''; }); }).catchError((_) {});
+    timer = Timer.periodic(const Duration(seconds: 2), (_) => load());
   }
 
   @override
@@ -196,13 +197,15 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> askGemini() async {
     setState(() => aiBusy = true);
-    final contextText = messages.isEmpty ? 'Aku baru match dengan ${widget.match.fullName}. Buat sapaan pertama yang hangat.' : messages
-        .skip(messages.length > 8 ? messages.length - 8 : 0)
+    final recentMessages = messages.where((message) => message.deletedAt == null).toList();
+    final conversation = recentMessages.isEmpty ? 'Belum ada pesan.' : recentMessages
+        .skip(recentMessages.length > 8 ? recentMessages.length - 8 : 0)
         .map(
           (message) =>
               '${message.senderId == widget.match.userId ? widget.match.fullName : 'Aku'}: ${message.body}',
         )
         .join('\n');
+    final contextText = 'Aku bertipe ${viewerMbti.isEmpty ? 'MBTI belum diketahui' : viewerMbti}; ${widget.match.fullName} bertipe ${widget.match.mbti}. Buat tiga ide balasan pertemanan yang terasa alami untuk cara kedua tipe berkomunikasi, tanpa stereotip atau klaim bahwa MBTI menentukan hubungan. Percakapan:\n$conversation';
     try {
       suggestions = await ApiService.instance.ai('replies', contextText);
     } catch (error) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error'))); }
@@ -299,7 +302,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 Text(
                       widget.match.mbti,
                       style: const TextStyle(
-                        fontSize: 9,
+                        fontSize: 12,
                         color: Color(0xFF778091),
                       ),
                 ),
@@ -365,7 +368,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                     const Text(
                       'Mulai percakapan yang tulus',
-                      style: TextStyle(color: Color(0xFF9298A4), fontSize: 8),
+                      style: TextStyle(color: Color(0xFF9298A4), fontSize: 12),
                     ),
                   ],
                 ),
@@ -379,7 +382,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         'HARI INI',
                         style: TextStyle(
                           color: Color(0xFFA0A5AD),
-                          fontSize: 8,
+                          fontSize: 12,
                           letterSpacing: 1.2,
                           fontWeight: FontWeight.w800,
                         ),
@@ -448,7 +451,7 @@ class _SuggestionBox extends StatelessWidget {
               'SARAN GEMINI',
               style: TextStyle(
                 color: violet,
-                fontSize: 8,
+                fontSize: 12,
                 letterSpacing: 1,
                 fontWeight: FontWeight.w900,
               ),
@@ -469,7 +472,7 @@ class _SuggestionBox extends StatelessWidget {
               ),
               child: Text(
                 idea,
-                style: const TextStyle(fontSize: 10, color: ink),
+                style: const TextStyle(fontSize: 12, color: ink),
               ),
             ),
           ),
@@ -527,8 +530,8 @@ class _Composer extends StatelessWidget {
                 const Icon(Icons.reply_rounded, size: 17, color: violet),
                 const SizedBox(width: 8),
                 Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('Balas $replyLabel', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: violet)),
-                  Text(replying!.body.isNotEmpty ? replying!.body : replying!.imageUrl != null ? 'Foto' : '', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, color: ink)),
+                  Text('Balas $replyLabel', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: violet)),
+                  Text(replying!.body.isNotEmpty ? replying!.body : replying!.imageUrl != null ? 'Foto' : '', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: ink)),
                 ])),
                 IconButton(onPressed: onCancelReply, icon: const Icon(Icons.close_rounded, size: 18), tooltip: 'Batal membalas'),
               ]),
@@ -586,8 +589,8 @@ class _Composer extends StatelessWidget {
                   textCapitalization: TextCapitalization.sentences,
                   onSubmitted: (_) => onSend(),
                   decoration: const InputDecoration(
-                    hintText: 'Tulis pesan yang tulus...',
-                    hintStyle: TextStyle(fontSize: 11),
+                    hintText: 'Tulis pesan...',
+                    hintStyle: TextStyle(fontSize: 12),
                     isDense: true,
                     contentPadding: EdgeInsets.symmetric(
                       horizontal: 13,
@@ -675,8 +678,8 @@ class MessageBubble extends StatelessWidget {
                   margin: const EdgeInsets.only(bottom: 5),
                   decoration: BoxDecoration(color: const Color(0xFFF0EBFA), borderRadius: BorderRadius.circular(10), border: const Border(left: BorderSide(color: violet, width: 3))),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(message.replyTo!.senderId == peerUserId ? peerName : 'Kamu', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: violet)),
-                    Text(message.replyTo!.deletedAt != null ? 'Pesan ini telah dihapus' : message.replyTo!.hasImage ? 'Foto${message.replyTo!.body != 'Foto' ? ' · ${message.replyTo!.body}' : ''}' : message.replyTo!.body, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, color: ink)),
+                    Text(message.replyTo!.senderId == peerUserId ? peerName : 'Kamu', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: violet)),
+                    Text(message.replyTo!.deletedAt != null ? 'Pesan ini telah dihapus' : message.replyTo!.hasImage ? 'Foto${message.replyTo!.body != 'Foto' ? ' · ${message.replyTo!.body}' : ''}' : message.replyTo!.body, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: ink)),
                   ]),
                 ),
               ],
@@ -717,7 +720,7 @@ class MessageBubble extends StatelessWidget {
                     message.body,
                     style: TextStyle(
                       color: mine ? Colors.white : ink,
-                      fontSize: 11,
+                      fontSize: 12,
                       height: 1.4,
                       fontStyle: message.deletedAt != null ? FontStyle.italic : FontStyle.normal,
                     ),
@@ -726,7 +729,7 @@ class MessageBubble extends StatelessWidget {
               const SizedBox(height: 3),
               Text(
                 '${_time(message.createdAt)}${mine && message.deletedAt == null ? ' · ${message.readAt == null ? 'terkirim' : 'dibaca'}' : ''}',
-                style: const TextStyle(color: Color(0xFFA3A7B0), fontSize: 7),
+                style: const TextStyle(color: Color(0xFFA3A7B0), fontSize: 12),
               ),
             ],
           ),

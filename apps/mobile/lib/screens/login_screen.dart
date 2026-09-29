@@ -16,7 +16,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final password = TextEditingController();
   final name = TextEditingController();
   final username = TextEditingController();
-  bool register = false, obscure = true, busy = false;
+  bool register = false, obscure = true, busy = false, entering = false;
 
   Future<void> submit() async {
     setState(() => busy = true);
@@ -33,6 +33,9 @@ class _LoginScreenState extends State<LoginScreen> {
       }
       if (mounted) {
         final profile = await ApiService.instance.profile();
+        if (!mounted) return;
+        setState(() => entering = true);
+        await Future<void>.delayed(const Duration(milliseconds: 720));
         if (!mounted) return;
         Navigator.of(
           context,
@@ -53,8 +56,39 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    body: SafeArea(
-      child: SingleChildScrollView(
+    body: DecoratedBox(
+      decoration: const BoxDecoration(gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xFFFFEEE2), Color(0xFFF8F1EF), Color(0xFFE9E0FF)],
+      )),
+      child: SafeArea(
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 420),
+        child: entering ? Center(
+          key: const ValueKey('signed-in'),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              TweenAnimationBuilder<double>(
+                tween: Tween(begin: .65, end: 1),
+                duration: const Duration(milliseconds: 520),
+                curve: Curves.elasticOut,
+                builder: (context, scale, child) => Transform.scale(scale: scale, child: child),
+                child: Container(width: 78, height: 78, decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [coral, violet]),
+                  borderRadius: BorderRadius.circular(25),
+                  boxShadow: const [BoxShadow(color: Color(0x447157D9), blurRadius: 30, offset: Offset(0, 12))],
+                ), child: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 38)),
+              ),
+              const SizedBox(height: 20),
+              Text(register ? 'Cerita barumu dimulai.' : 'Selamat datang kembali.', textAlign: TextAlign.center, style: const TextStyle(fontFamily: 'serif', fontSize: 30, fontWeight: FontWeight.w700, color: ink)),
+              const SizedBox(height: 8),
+              const Text('Menyiapkan ruang pertemananmu…', textAlign: TextAlign.center, style: TextStyle(fontSize: 14, color: Color(0xFF667087))),
+            ]),
+          ),
+        ) : SingleChildScrollView(
+        key: const ValueKey('login-form'),
         padding: const EdgeInsets.fromLTRB(22, 18, 22, 36),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -225,6 +259,8 @@ class _LoginScreenState extends State<LoginScreen> {
           ],
         ),
       ),
+      ),
+    ),
     ),
   );
 

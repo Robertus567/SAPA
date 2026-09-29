@@ -28,7 +28,7 @@ class _HomeShellState extends State<HomeShell> {
     _checkProfile();
     LocalAlerts.initialize();
     _pollNotifications();
-    notificationTimer = Timer.periodic(const Duration(seconds: 10), (_) => _pollNotifications());
+    notificationTimer = Timer.periodic(const Duration(seconds: 5), (_) => _pollNotifications());
   }
 
   @override
@@ -53,7 +53,7 @@ class _HomeShellState extends State<HomeShell> {
         for (final item in unread) { if (!seenNotifications!.contains(item.id)) await LocalAlerts.show(item); }
       }
       seenNotifications = values.map((item) => item.id).toSet();
-      setState(() => unreadNotifications = unread.length);
+      if (unreadNotifications != unread.length) setState(() => unreadNotifications = unread.length);
     } catch (_) { /* app remains usable when temporarily offline */ }
   }
 
@@ -67,14 +67,30 @@ class _HomeShellState extends State<HomeShell> {
       const ProfileEditorScreen(),
     ];
     return Scaffold(
-      body: IndexedStack(index: index, children: pages),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFFFF3EA), Color(0xFFF6F0F7), Color(0xFFEDE5FF)],
+        )),
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: 1),
+          duration: const Duration(milliseconds: 550),
+          curve: Curves.easeOutCubic,
+          builder: (context, progress, child) => Opacity(
+            opacity: progress,
+            child: Transform.translate(offset: Offset(0, 16 * (1 - progress)), child: child),
+          ),
+          child: IndexedStack(index: index, children: pages),
+        ),
+      ),
       bottomNavigationBar: SafeArea(
         top: false,
         child: Container(
           margin: const EdgeInsets.fromLTRB(14, 0, 14, 10),
           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 7),
           decoration: BoxDecoration(
-            color: ink,
+            gradient: const LinearGradient(colors: [Color(0xFF17233D), Color(0xFF38285D)]),
             borderRadius: BorderRadius.circular(23),
             boxShadow: const [
               BoxShadow(
@@ -181,7 +197,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
         await showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (_) => MatchDialog(profile: profile, match: matchedItem, viewerPhoto: viewer?.photoUrl ?? '/people/default.svg'),
+          builder: (_) => MatchDialog(profile: profile, match: matchedItem, viewerPhoto: viewer?.photoUrl ?? '/people/default.svg', viewerMbti: viewer?.mbti ?? ''),
         );
       }
       if (mounted) setState(() => current++);
@@ -211,6 +227,22 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
             const SizedBox(height: 17),
             Text(profile.bio, style: const TextStyle(height: 1.55, fontSize: 14)),
             const SizedBox(height: 18),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [Color(0xFFF3EDFF), Color(0xFFFFF0E6)]),
+                borderRadius: BorderRadius.circular(19),
+                border: Border.all(color: const Color(0x337157D9)),
+              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('${profile.compatibility}% potensi nyambung', style: const TextStyle(color: violet, fontWeight: FontWeight.w900, fontSize: 15)),
+                const SizedBox(height: 8),
+                ...profile.compatibilityReasons.map((reason) => Padding(padding: const EdgeInsets.only(bottom: 6), child: Text('✦ $reason', style: const TextStyle(height: 1.4, fontSize: 12)))),
+                const Text('Skor ini ide untuk memulai obrolan, bukan prediksi hubungan.', style: TextStyle(color: Color(0xFF697287), fontSize: 12)),
+              ]),
+            ),
+            const SizedBox(height: 16),
             Wrap(spacing: 7, runSpacing: 7, children: profile.interests.map((item) => Chip(label: Text(item))).toList()),
             const SizedBox(height: 24),
             FilledButton.icon(
@@ -275,7 +307,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
               style: TextStyle(
                 color: coral,
                 letterSpacing: 1.6,
-                fontSize: 9,
+                fontSize: 12,
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -305,7 +337,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                       showCheckmark: false,
                       selectedColor: ink,
                       labelStyle: TextStyle(
-                        fontSize: 10,
+                        fontSize: 12,
                         fontWeight: FontWeight.w800,
                         color: active ? Colors.white : ink,
                       ),
@@ -423,7 +455,7 @@ class ProfileCard extends StatelessWidget {
                       '${profile.compatibility}% cocok',
                       style: const TextStyle(
                         color: ink,
-                        fontSize: 10,
+                        fontSize: 12,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -454,7 +486,7 @@ class ProfileCard extends StatelessWidget {
                       Text(
                         'online',
                         style: TextStyle(
-                          fontSize: 9,
+                          fontSize: 12,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -490,7 +522,7 @@ class ProfileCard extends StatelessWidget {
                               '${profile.mbti} · ${profile.city}',
                               style: const TextStyle(
                                 color: Colors.white60,
-                                fontSize: 11,
+                                fontSize: 12,
                               ),
                             ),
                           ],
@@ -557,7 +589,7 @@ class ProfileCard extends StatelessWidget {
                                 color: profile.sharedInterests.contains(item)
                                     ? lime
                                     : Colors.white,
-                                fontSize: 9,
+                                fontSize: 12,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -578,7 +610,7 @@ class ProfileCard extends StatelessWidget {
                         '${profile.sharedInterests.length} minat yang sama',
                         style: const TextStyle(
                           color: Colors.white70,
-                          fontSize: 9,
+                          fontSize: 12,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -631,10 +663,11 @@ class ActionCircle extends StatelessWidget {
 }
 
 class MatchDialog extends StatefulWidget {
-  const MatchDialog({super.key, required this.profile, required this.match, required this.viewerPhoto});
+  const MatchDialog({super.key, required this.profile, required this.match, required this.viewerPhoto, required this.viewerMbti});
   final Profile profile;
   final MatchItem match;
   final String viewerPhoto;
+  final String viewerMbti;
   @override
   State<MatchDialog> createState() => _MatchDialogState();
 }
@@ -647,7 +680,7 @@ class _MatchDialogState extends State<MatchDialog> {
     try {
       ideas = await ApiService.instance.ai(
         'icebreaker',
-        'Aku baru match dengan ${widget.profile.fullName} ${widget.profile.mbti}. Minat: ${widget.profile.interests.join(', ')}',
+        'Aku bertipe ${widget.viewerMbti}; ${widget.profile.fullName} bertipe ${widget.profile.mbti}. Minat bersama: ${widget.profile.sharedInterests.join(', ')}. Minatnya: ${widget.profile.interests.join(', ')}. Buat tiga pertanyaan pertemanan yang spesifik dan alami untuk dua cara komunikasi ini, tanpa stereotip MBTI.',
       );
     } catch (_) {
       ideas = [
@@ -671,7 +704,7 @@ class _MatchDialogState extends State<MatchDialog> {
             "IT'S A MATCH!",
             style: TextStyle(
               color: coral,
-              fontSize: 10,
+              fontSize: 12,
               letterSpacing: 1.7,
               fontWeight: FontWeight.w900,
             ),
@@ -721,7 +754,7 @@ class _MatchDialogState extends State<MatchDialog> {
           Text(
             'Mulai dari ${widget.profile.sharedInterests.isEmpty ? 'cerita yang kalian sukai' : widget.profile.sharedInterests.join(', ')}.',
             textAlign: TextAlign.center,
-            style: const TextStyle(color: Color(0xFF697287), fontSize: 11),
+            style: const TextStyle(color: Color(0xFF697287), fontSize: 12),
           ),
           const SizedBox(height: 17),
           if (ideas.isEmpty)
@@ -750,7 +783,7 @@ class _MatchDialogState extends State<MatchDialog> {
                 ),
                 child: Text(
                   idea,
-                  style: const TextStyle(fontSize: 9, color: ink),
+                  style: const TextStyle(fontSize: 12, color: ink),
                 ),
               ),
             ),
@@ -799,7 +832,7 @@ class _MatchesScreenState extends State<MatchesScreen> {
   void initState() {
     super.initState();
     load();
-    timer = Timer.periodic(const Duration(seconds: 10), (_) => load(silent: true));
+    timer = Timer.periodic(const Duration(seconds: 5), (_) => load(silent: true));
   }
 
   @override
@@ -840,7 +873,7 @@ class _MatchesScreenState extends State<MatchesScreen> {
             ),
             const Text(
               'Lanjutkan obrolan yang terasa nyambung.',
-              style: TextStyle(color: Color(0xFF6C7486), fontSize: 11),
+              style: TextStyle(color: Color(0xFF6C7486), fontSize: 12),
             ),
             const SizedBox(height: 20),
             if (error != null) Text(error!, style: const TextStyle(color: Colors.red)),
@@ -906,7 +939,7 @@ class _MatchesScreenState extends State<MatchesScreen> {
                                           item.mbti,
                                           style: const TextStyle(
                                             color: violet,
-                                            fontSize: 7,
+                                            fontSize: 12,
                                             fontWeight: FontWeight.w900,
                                           ),
                                         ),
@@ -919,7 +952,7 @@ class _MatchesScreenState extends State<MatchesScreen> {
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                       color: Color(0xFF737B8B),
-                                      fontSize: 10,
+                                      fontSize: 12,
                                     ),
                                   ),
                                 ],
@@ -933,7 +966,7 @@ class _MatchesScreenState extends State<MatchesScreen> {
                                   '${item.unread}',
                                   style: const TextStyle(
                                     color: Colors.white,
-                                    fontSize: 8,
+                                    fontSize: 12,
                                     fontWeight: FontWeight.w900,
                                   ),
                                 ),
@@ -1047,7 +1080,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               '@nara · INFP · Bandung',
               style: TextStyle(
                 color: violet,
-                fontSize: 10,
+                fontSize: 12,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -1066,7 +1099,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const Text(
                   'TENTANG AKU',
                   style: TextStyle(
-                    fontSize: 9,
+                    fontSize: 12,
                     letterSpacing: 1.2,
                     color: coral,
                     fontWeight: FontWeight.w900,
@@ -1108,7 +1141,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Text(
                   'MINAT UTAMA',
                   style: TextStyle(
-                    fontSize: 9,
+                    fontSize: 12,
                     letterSpacing: 1.2,
                     color: lime,
                     fontWeight: FontWeight.w900,
@@ -1193,7 +1226,7 @@ class Interest extends StatelessWidget {
       label,
       style: const TextStyle(
         color: Colors.white,
-        fontSize: 9,
+        fontSize: 12,
         fontWeight: FontWeight.w700,
       ),
     ),

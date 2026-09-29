@@ -13,6 +13,7 @@ export type Profile = {
   bio: string;
   photoUrl: string;
   compatibility?: number;
+  compatibilityReasons?: string[];
   sharedInterests?: string[];
   isOnline?: boolean;
   birthDate?: string | null;

@@ -78,8 +78,15 @@ export function CommunityApp() {
   }, [loadProfiles, refreshActivity, router]);
 
   useEffect(() => {
-    const timer = window.setInterval(() => { if (document.visibilityState === "visible") void refreshActivity(); }, 8000);
-    return () => window.clearInterval(timer);
+    const refreshWhenVisible = () => { if (document.visibilityState === "visible") void refreshActivity(); };
+    const timer = window.setInterval(refreshWhenVisible, 5000);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    window.addEventListener("focus", refreshWhenVisible);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      window.removeEventListener("focus", refreshWhenVisible);
+    };
   }, [refreshActivity]);
 
   useEffect(() => {
@@ -119,7 +126,7 @@ export function CommunityApp() {
     if (!match) return;
     setAiBusy(true);
     try {
-      const data = await jsonRequest<{ suggestions: string[] }>("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "icebreaker", context: `${viewer?.fullName} (${viewer?.mbti}) baru match dengan ${match.profile.fullName} (${match.profile.mbti}). Buat tiga pertanyaan ramah untuk membuka percakapan.` }) });
+      const data = await jsonRequest<{ suggestions: string[] }>("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "icebreaker", context: `${viewer?.fullName} bertipe ${viewer?.mbti}, baru match dengan ${match.profile.fullName} bertipe ${match.profile.mbti}. Minatku: ${viewer?.interests.join(", ")}. Minat dia: ${"interests" in match.profile ? match.profile.interests.join(", ") : "belum diketahui"}. Buat tiga pertanyaan pertemanan yang spesifik bagi cara komunikasi kedua tipe ini, tanpa stereotip atau klaim pasangan MBTI pasti cocok.` }) });
       setIcebreakers(data.suggestions);
     } catch (error) { setToast((error as Error).message); }
     finally { setAiBusy(false); }
@@ -151,7 +158,7 @@ export function CommunityApp() {
     <aside className="match-panel"><div className="panel-heading"><div><p>KONEKSI TERBARU</p><h2>Matches <span>{matches.length}</span></h2></div><Link href="/messages">Lihat semua</Link></div><div className="match-list">{matches.length ? matches.slice(0, 5).map((item) => <Link href={`/messages/${item.conversationId}`} className="match-item" key={item.id}><div className="match-avatar"><img src={item.photoUrl} alt={item.fullName} /></div><div><strong>{item.fullName}</strong><span>{item.mbti}</span><p>{item.lastMessage}</p></div>{item.unread > 0 && <b>{item.unread}</b>}</Link>) : <p className="match-empty">Belum ada match. Mulai dari satu like yang tulus ♡</p>}</div><div className="daily-prompt"><span>IDE UNTUK MENYAPA</span><Sparkles /><h3>Kalau hidupmu jadi film, genre apa yang paling pas?</h3><button onClick={() => { void navigator.clipboard?.writeText("Kalau hidupmu jadi film, genre apa yang paling pas?"); setToast("Pertanyaan disalin."); }}>Salin pertanyaan</button></div></aside>
     <nav className="mobile-tabbar">{navigation}</nav>
     {toast && <div className="toast" role="status"><Sparkles size={16} /> {toast}</div>}
-    {detail && <div className="modal-backdrop" onClick={() => setDetail(null)}><div className="profile-detail-modal" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setDetail(null)} aria-label="Tutup"><X /></button><img src={detail.photoUrl} alt={detail.fullName} /><div><span className="overline">{detail.mbti} · {detail.city}</span><h2>{detail.fullName}, {detail.age}</h2><p>{detail.bio}</p><div className="interest-tags">{detail.interests.map((interest) => <span key={interest}>{interest}</span>)}</div><button className="button button-primary" disabled={acting} onClick={() => { void like(detail); setDetail(null); }}>Kirim like <Heart size={17} /></button></div></div></div>}
+    {detail && <div className="modal-backdrop" onClick={() => setDetail(null)}><div className="profile-detail-modal" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setDetail(null)} aria-label="Tutup"><X /></button><img src={detail.photoUrl} alt={detail.fullName} /><div><span className="overline">{detail.mbti} · {detail.city}</span><h2>{detail.fullName}, {detail.age}</h2><p>{detail.bio}</p><div className="interest-tags">{detail.interests.map((interest) => <span key={interest}>{interest}</span>)}</div><div className="compatibility-insight"><strong><Sparkles size={16} /> {detail.compatibility ?? 0}% potensi nyambung</strong><ul>{detail.compatibilityReasons?.map((reason) => <li key={reason}>{reason}</li>)}</ul><small>Skor untuk membuka obrolan, bukan prediksi keberhasilan hubungan.</small></div><button className="button button-primary" disabled={acting} onClick={() => { void like(detail); setDetail(null); }}>Kirim like <Heart size={17} /></button></div></div></div>}
     {match && <div className="modal-backdrop"><div className="match-modal"><button className="modal-close" onClick={() => setMatch(null)} aria-label="Tutup"><X /></button><span className="match-kicker">IT&apos;S A MATCH!</span><div className="matched-faces"><img src={viewer?.photoUrl || "/people/default.svg"} alt={viewer?.fullName || "Kamu"} /><Heart fill="currentColor" /><img src={match.profile.photoUrl} alt={match.profile.fullName} /></div><h2>Kalian sama-sama ingin ngobrol.</h2><p>Sapa {match.profile.fullName} dengan pertanyaan yang terasa seperti kamu.</p>{icebreakers.length ? <div className="modal-icebreakers">{icebreakers.map((item) => <Link key={item} href={`/messages/${match.conversationId}?draft=${encodeURIComponent(item)}`}>{item}</Link>)}</div> : <button className="gemini-icebreaker" onClick={createIcebreakers} disabled={aiBusy}><Sparkles size={15} /> {aiBusy ? "Sedang merangkai…" : "Buat icebreaker dengan Gemini"}</button>}<Link className="button button-primary" href={`/messages/${match.conversationId}`}>Kirim sapa pertama</Link><button className="later" onClick={() => setMatch(null)}>Nanti saja</button></div></div>}
   </main>;
 }

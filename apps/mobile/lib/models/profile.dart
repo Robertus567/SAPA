@@ -11,6 +11,7 @@ class Profile {
     required this.interests,
     this.sharedInterests = const [],
     this.compatibility = 86,
+    this.compatibilityReasons = const [],
     this.isOnline = false,
     this.birthDate,
     this.languages = const ['Indonesia'],
@@ -31,6 +32,7 @@ class Profile {
   final List<String> interests;
   final List<String> sharedInterests;
   final int compatibility;
+  final List<String> compatibilityReasons;
   final bool isOnline;
   final String? birthDate;
   final List<String> languages;
@@ -51,6 +53,7 @@ class Profile {
     interests: List<String>.from(json['interests'] ?? const []),
     sharedInterests: List<String>.from(json['sharedInterests'] ?? const []),
     compatibility: (json['compatibility'] as num?)?.toInt() ?? 86,
+    compatibilityReasons: List<String>.from(json['compatibilityReasons'] ?? const []),
     isOnline: json['isOnline'] == true,
     birthDate: json['birthDate'] as String?,
     languages: List<String>.from(json['languages'] ?? const ['Indonesia']),

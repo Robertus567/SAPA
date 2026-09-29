@@ -63,7 +63,7 @@ Tanpa API key atau saat layanan sibuk, bio/icebreaker/balasan tetap punya fallba
 4. Jika database masih kosong, jalankan `npm run db:setup` **sekali** dari `apps/web` setelah `.env.local` terisi. Jika sudah berisi data, jalankan `npm run db:migrate` untuk skema chat baru.
 5. Push ke branch `main` atau klik Deploy pada commit terbaru. Periksa deployment baru, bukan URL deployment lama yang berstatus *Stale*.
 
-Chat, balasan berkutip, penghapusan pesan, dan notifikasi disimpan di Neon yang sama untuk web dan APK, lalu disegarkan berkala (polling). Penghapusan untuk semua orang hanya boleh oleh pengirim; kutipan pesan yang dihapus berubah menjadi penanda penghapusan. Tidak perlu server WebSocket persisten.
+Chat, balasan berkutip, penghapusan pesan, dan notifikasi disimpan di Neon yang sama untuk web dan APK, lalu disegarkan berkala (polling). Saat layar aktif, chat diperiksa sekitar tiap 2 detik dan aktivitas lain sekitar tiap 5 detik; ini mendekati waktu nyata, bukan WebSocket/push instan. Penghapusan untuk semua orang hanya boleh oleh pengirim; kutipan pesan yang dihapus berubah menjadi penanda penghapusan. Tidak perlu server WebSocket persisten.
 
 ## 5. Menjalankan Flutter
 

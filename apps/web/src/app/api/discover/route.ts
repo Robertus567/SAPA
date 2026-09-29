@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { userFromRequest } from "@/lib/auth";
-import { compatibilityScore, sharedInterests } from "@/lib/compatibility";
+import { compatibilityReasons, compatibilityScore, sharedInterests } from "@/lib/compatibility";
 import { apiError, db } from "@/lib/db";
 import { rowToProfile } from "@/lib/profiles";
 
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
     const profiles = candidateRows
       .map((row) => {
         const profile = rowToProfile(row);
-        return { ...profile, compatibility: compatibilityScore(viewer, profile), sharedInterests: sharedInterests(viewer, profile) };
+        return { ...profile, compatibility: compatibilityScore(viewer, profile), compatibilityReasons: compatibilityReasons(viewer, profile), sharedInterests: sharedInterests(viewer, profile) };
       })
       .filter((profile) =>
         (!mbti || profile.mbti === mbti) &&

@@ -19,7 +19,7 @@ class _LikesScreenState extends State<LikesScreen> {
   String? error;
 
   @override
-  void initState() { super.initState(); load(); timer = Timer.periodic(const Duration(seconds: 12), (_) => load(silent: true)); }
+  void initState() { super.initState(); load(); timer = Timer.periodic(const Duration(seconds: 5), (_) => load(silent: true)); }
   @override
   void dispose() { timer?.cancel(); super.dispose(); }
 
@@ -61,7 +61,7 @@ class _LikesScreenState extends State<LikesScreen> {
         final person = likes[index];
         return Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0x1117233D))), child: Row(children: [
           ClipRRect(borderRadius: BorderRadius.circular(16), child: SizedBox(width: 64, height: 72, child: ProfileImage('${person['photoUrl']}'))),
-          const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('${person['fullName']}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900)), Text('${person['mbti']} · ${person['city']}', style: const TextStyle(color: violet, fontSize: 10))])),
+          const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('${person['fullName']}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900)), Text('${person['mbti']} · ${person['city']}', style: const TextStyle(color: violet, fontSize: 12))])),
           person['likedBack'] == true ? const Icon(Icons.check_circle_rounded, color: Color(0xFF6EA64B)) : IconButton.filled(onPressed: busy ? null : () => likeBack(person), style: IconButton.styleFrom(backgroundColor: coral, foregroundColor: Colors.white), icon: const Icon(Icons.favorite_rounded)),
         ]));
       }))),
@@ -83,7 +83,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   String? error;
 
   @override
-  void initState() { super.initState(); load(); timer = Timer.periodic(const Duration(seconds: 12), (_) => load(silent: true)); }
+  void initState() { super.initState(); load(); timer = Timer.periodic(const Duration(seconds: 5), (_) => load(silent: true)); }
   @override
   void dispose() { timer?.cancel(); super.dispose(); }
 
@@ -120,7 +120,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         final action = item.type == 'like' ? 'menyukai profilmu' : item.type == 'spark' ? 'mengirim spark' : item.type == 'match' ? 'match denganmu' : 'mengirim pesan baru';
         return Material(color: item.readAt == null ? const Color(0xFFEFEAFF) : Colors.white70, borderRadius: BorderRadius.circular(18), child: InkWell(onTap: () => open(item), borderRadius: BorderRadius.circular(18), child: Padding(padding: const EdgeInsets.all(13), child: Row(children: [
           ClipRRect(borderRadius: BorderRadius.circular(14), child: SizedBox(width: 48, height: 48, child: ProfileImage(item.actorPhoto))),
-          const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('${item.actorName} $action', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800)), const SizedBox(height: 3), Text(item.createdAt.split('T').first, style: const TextStyle(fontSize: 10, color: Color(0xFF788194)))])),
+          const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('${item.actorName} $action', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800)), const SizedBox(height: 3), Text(item.createdAt.split('T').first, style: const TextStyle(fontSize: 12, color: Color(0xFF788194)))])),
           if (item.readAt == null) const CircleAvatar(radius: 4, backgroundColor: coral),
         ]))));
       }))),
