@@ -15,7 +15,7 @@ class ApiService {
   static final instance = ApiService._();
   static const baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://10.0.2.2:3000',
+    defaultValue: 'https://sapa-rpl-mbti.vercel.app',
   );
   String? _token;
 
@@ -91,8 +91,33 @@ class ApiService {
         .toList();
   }
 
-  Future<Map<String, dynamic>> like(String userId) =>
-      _request('POST', '/api/likes', body: {'targetUserId': userId});
+  Future<Map<String, dynamic>> like(String userId, {bool superLike = false}) =>
+      _request('POST', '/api/likes', body: {'targetUserId': userId, 'superLike': superLike});
+  Future<List<Map<String, dynamic>>> incomingLikes() async {
+    final data = await _request('GET', '/api/likes');
+    return (data['likes'] as List? ?? []).map((item) => Map<String, dynamic>.from(item as Map)).toList();
+  }
+  Future<Profile?> profile() async {
+    final data = await _request('GET', '/api/profile');
+    final value = data['profile'];
+    return value is Map<String, dynamic> ? Profile.fromJson(value) : null;
+  }
+
+  Future<Profile> updateProfile(Map<String, dynamic> profile) async {
+    final data = await _request('PUT', '/api/profile', body: profile);
+    return Profile.fromJson(data['profile'] as Map<String, dynamic>);
+  }
+
+  Future<List<SapaNotification>> notifications() async {
+    final data = await _request('GET', '/api/notifications');
+    return (data['notifications'] as List? ?? [])
+        .map((item) => SapaNotification.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> markNotification({String? id}) async {
+    await _request('PATCH', '/api/notifications', body: id == null ? {'all': true} : {'id': id});
+  }
   Future<List<MatchItem>> matches() async {
     final data = await _request('GET', '/api/matches');
     return (data['matches'] as List? ?? [])
@@ -147,24 +172,6 @@ class ApiService {
     return List<String>.from(data['suggestions'] ?? const []);
   }
 
-  Future<void> updateProfile(String bio) async => _request(
-    'PUT',
-    '/api/profile',
-    body: {
-      'fullName': 'Nara Putri',
-      'birthDate': '2003-04-12',
-      'city': 'Bandung',
-      'country': 'Indonesia',
-      'mbti': 'INFP',
-      'languages': ['Indonesia', 'English'],
-      'hobbies': ['Journaling', 'Cafe hopping', 'Fotografi'],
-      'interests': ['Film', 'Indie music', 'Psikologi', 'Fotografi'],
-      'lookingFor': ['Teman baru', 'Study buddy'],
-      'bio': bio,
-      'photoUrl': '/people/nara.svg',
-    },
-  );
-
   Future<Map<String, dynamic>> _request(
     String method,
     String path, {
@@ -182,6 +189,10 @@ class ApiService {
           await http
               .put(uri, headers: _headers, body: jsonEncode(body ?? {}))
               .timeout(const Duration(seconds: 20)),
+        'PATCH' =>
+          await http
+              .patch(uri, headers: _headers, body: jsonEncode(body ?? {}))
+              .timeout(const Duration(seconds: 20)),
         _ =>
           await http
               .get(uri, headers: _headers)
@@ -192,9 +203,14 @@ class ApiService {
         'Server belum dapat dijangkau. Periksa API_BASE_URL dan koneksi internet.',
       );
     }
-    final decoded = response.body.isEmpty
-        ? <String, dynamic>{}
-        : jsonDecode(response.body) as Map<String, dynamic>;
+    Map<String, dynamic> decoded;
+    try {
+      decoded = response.body.isEmpty
+          ? <String, dynamic>{}
+          : jsonDecode(response.body) as Map<String, dynamic>;
+    } catch (_) {
+      throw ApiException('Server mengirim respons yang tidak valid. Coba lagi.');
+    }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ApiException('${decoded['error'] ?? 'Permintaan belum berhasil.'}');
     }

@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import '../data/demo_data.dart';
 import '../main.dart';
 import '../models/profile.dart';
 import '../services/api_service.dart';
@@ -18,19 +17,19 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final input = TextEditingController();
   final scroll = ScrollController();
-  List<ChatMessage> messages = demoMessages();
+  List<ChatMessage> messages = [];
   List<String> suggestions = [];
   Timer? timer;
   bool sending = false, aiBusy = false;
   String? imageUrl;
+  String viewerPhoto = '/people/default.svg';
 
   @override
   void initState() {
     super.initState();
     load();
-    if (widget.match.conversationId != 'demo') {
-      timer = Timer.periodic(const Duration(seconds: 3), (_) => load());
-    }
+    ApiService.instance.profile().then((value) { if (mounted) setState(() => viewerPhoto = value?.photoUrl ?? '/people/default.svg'); }).catchError((_) {});
+    timer = Timer.periodic(const Duration(seconds: 5), (_) => load());
   }
 
   @override
@@ -46,11 +45,11 @@ class _ChatScreenState extends State<ChatScreen> {
       final result = await ApiService.instance.messages(
         widget.match.conversationId,
       );
-      if (mounted && result.isNotEmpty) {
+      if (mounted) {
         setState(() => messages = result);
         _bottom();
       }
-    } catch (_) {}
+    } catch (error) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error'))); }
   }
 
   void _bottom() => WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -67,6 +66,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final body = (selected ?? input.text).trim();
     if ((body.isEmpty && imageUrl == null) || sending) return;
     final attachedImage = imageUrl;
+    final optimisticId = DateTime.now().microsecondsSinceEpoch.toString();
     setState(() {
       sending = true;
       input.clear();
@@ -75,7 +75,7 @@ class _ChatScreenState extends State<ChatScreen> {
       messages = [
         ...messages,
         ChatMessage(
-          id: DateTime.now().microsecondsSinceEpoch.toString(),
+          id: optimisticId,
           senderId: 'me',
           body: body,
           imageUrl: attachedImage,
@@ -90,11 +90,10 @@ class _ChatScreenState extends State<ChatScreen> {
         body,
         imageUrl: attachedImage,
       );
-      if (widget.match.conversationId != 'demo') {
-        await load();
-      }
+      await load();
     } catch (error) {
-      if (mounted && widget.match.conversationId != 'demo') {
+      if (mounted) {
+        setState(() { messages.removeWhere((item) => item.id == optimisticId); input.text = body; imageUrl = attachedImage; });
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('$error')));
@@ -114,10 +113,10 @@ class _ChatScreenState extends State<ChatScreen> {
       );
       if (picked == null) return;
       final bytes = await picked.readAsBytes();
-      if (bytes.length > 900000) {
+      if (bytes.length > 800000) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Gambar maksimal 900 KB.')),
+            const SnackBar(content: Text('Gambar maksimal 800 KB.')),
           );
         }
         return;
@@ -142,8 +141,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> askGemini() async {
     setState(() => aiBusy = true);
-    final contextText = messages
-        .take(8)
+    final contextText = messages.isEmpty ? 'Aku baru match dengan ${widget.match.fullName}. Buat sapaan pertama yang hangat.' : messages
+        .skip(messages.length > 8 ? messages.length - 8 : 0)
         .map(
           (message) =>
               '${message.senderId == widget.match.userId ? widget.match.fullName : 'Aku'}: ${message.body}',
@@ -151,13 +150,7 @@ class _ChatScreenState extends State<ChatScreen> {
         .join('\n');
     try {
       suggestions = await ApiService.instance.ai('replies', contextText);
-    } catch (_) {
-      suggestions = [
-        'Wah, ceritain lebih banyak dong!',
-        'Aku relate. Kayaknya kita punya selera yang mirip.',
-        'Menarik banget! Kamu mulai suka itu sejak kapan?',
-      ];
-    }
+    } catch (error) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error'))); }
     if (mounted) setState(() => aiBusy = false);
     _bottom();
   }
@@ -187,13 +180,11 @@ class _ChatScreenState extends State<ChatScreen> {
     );
     if (confirmed != true || !mounted) return;
     try {
-      if (widget.match.id != 'demo-match') {
-        await ApiService.instance.safety(
+      await ApiService.instance.safety(
           action: action,
           targetUserId: widget.match.userId,
           matchId: widget.match.id,
         );
-      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -238,41 +229,30 @@ class _ChatScreenState extends State<ChatScreen> {
               child: ProfileImage(widget.match.photoUrl),
             ),
             const SizedBox(width: 10),
-            Column(
+            Expanded(child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   widget.match.fullName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
-                Row(
-                  children: [
-                    const CircleAvatar(
-                      radius: 3,
-                      backgroundColor: Color(0xFF59B05C),
-                    ),
-                    const SizedBox(width: 5),
-                    Text(
-                      'online · ${widget.match.mbti}',
+                Text(
+                      widget.match.mbti,
                       style: const TextStyle(
                         fontSize: 9,
                         color: Color(0xFF778091),
                       ),
-                    ),
-                  ],
                 ),
               ],
-            ),
+            )),
           ],
         ),
         actions: [
-          IconButton(
-            onPressed: () {},
-            icon: const Icon(Icons.videocam_outlined),
-          ),
           PopupMenuButton<String>(
             onSelected: safety,
             itemBuilder: (_) => const [
@@ -295,11 +275,11 @@ class _ChatScreenState extends State<ChatScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const CircleAvatar(
+                        CircleAvatar(
                           radius: 25,
                           backgroundColor: Colors.white,
                           child: ClipOval(
-                            child: ProfileImage('assets/people/nara.svg'),
+                            child: ProfileImage(viewerPhoto),
                           ),
                         ),
                         Transform.translate(
@@ -329,7 +309,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                     ),
                     const Text(
-                      '94% cocok · mulai percakapan yang tulus',
+                      'Mulai percakapan yang tulus',
                       style: TextStyle(color: Color(0xFF9298A4), fontSize: 8),
                     ),
                   ],

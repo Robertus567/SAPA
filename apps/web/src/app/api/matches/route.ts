@@ -1,15 +1,9 @@
 import { NextRequest } from "next/server";
 import { requireUser } from "@/lib/auth";
-import { apiError, db, isDatabaseConfigured } from "@/lib/db";
+import { apiError, db } from "@/lib/db";
 
 export async function GET(request: NextRequest) {
   try {
-    if (!isDatabaseConfigured()) {
-      return Response.json({ matches: [{
-        id: "demo-match", conversationId: "demo", userId: "demo-bima", fullName: "Bima Ardhana", username: "bimaworks",
-        mbti: "ENFJ", photoUrl: "/people/bima.svg", lastMessage: "Film terakhir yang bikin kamu kepikiran apa?", unread: 1, matchedAt: new Date().toISOString(),
-      }], demo: true });
-    }
     const user = await requireUser(request);
     const sql = db();
     const rows = await sql`
@@ -33,4 +27,3 @@ export async function GET(request: NextRequest) {
     return apiError(error);
   }
 }
-

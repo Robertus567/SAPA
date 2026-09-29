@@ -1,6 +1,6 @@
 # SAPA Mobile
 
-Flutter client untuk SAPA. Aplikasi memakai REST API yang disediakan `apps/web` dan menyediakan fallback preview saat backend belum tersedia.
+Flutter client untuk SAPA. Aplikasi memakai REST API nyata dari `apps/web`, dengan URL Vercel SAPA sebagai default.
 
 ```powershell
 flutter pub get

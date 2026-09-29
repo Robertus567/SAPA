@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
-import { apiError, db, isDatabaseConfigured } from "@/lib/db";
+import { apiError, db } from "@/lib/db";
 
 const schema = z.object({
   action: z.enum(["block", "report", "unmatch"]),
@@ -13,7 +13,6 @@ const schema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    if (!isDatabaseConfigured()) return Response.json({ ok: true, demo: true });
     const user = await requireUser(request);
     const raw = await request.json();
     const input = schema.parse(raw);
@@ -24,10 +23,15 @@ export async function POST(request: NextRequest) {
     if (input.action === "block") {
       await sql`INSERT INTO blocks (blocker_id, blocked_id) VALUES (${user.id}, ${input.targetUserId}) ON CONFLICT DO NOTHING`;
       await sql`UPDATE matches SET is_active=FALSE WHERE (user_a=${user.id} AND user_b=${input.targetUserId}) OR (user_a=${input.targetUserId} AND user_b=${user.id})`;
+      await sql`DELETE FROM likes WHERE (from_user=${user.id} AND to_user=${input.targetUserId}) OR (from_user=${input.targetUserId} AND to_user=${user.id})`;
     } else if (input.action === "report") {
       await sql`INSERT INTO reports (reporter_id, reported_id, reason, details) VALUES (${user.id}, ${input.targetUserId}, ${input.reason || "Lainnya"}, ${input.details || ""})`;
     } else if (input.matchId) {
-      await sql`UPDATE matches SET is_active=FALSE WHERE id=${input.matchId} AND (user_a=${user.id} OR user_b=${user.id})`;
+      const ended = await sql`UPDATE matches SET is_active=FALSE WHERE id=${input.matchId} AND ((user_a=${user.id} AND user_b=${input.targetUserId}) OR (user_b=${user.id} AND user_a=${input.targetUserId})) RETURNING id`;
+      if (!ended[0]) return Response.json({ error: "Match tidak ditemukan." }, { status: 404 });
+      await sql`DELETE FROM likes WHERE (from_user=${user.id} AND to_user=${input.targetUserId}) OR (from_user=${input.targetUserId} AND to_user=${user.id})`;
+    } else {
+      return Response.json({ error: "Pilih match yang ingin diakhiri." }, { status: 400 });
     }
     return Response.json({ ok: true });
   } catch (error) {

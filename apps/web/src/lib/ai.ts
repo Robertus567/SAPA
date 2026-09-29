@@ -2,6 +2,14 @@ import { GoogleGenAI, HarmBlockThreshold, HarmCategory } from "@google/genai";
 
 export type AiMode = "bio" | "icebreaker" | "replies";
 
+const primaryModel = () => process.env.GEMINI_MODEL || "gemini-3.8-flash";
+const backupModel = "gemini-3.5-flash-lite";
+
+function isTemporaryGeminiError(error: unknown) {
+  const message = String((error as Error)?.message || error);
+  return /\b(429|500|502|503|504|UNAVAILABLE|RESOURCE_EXHAUSTED)\b/i.test(message);
+}
+
 const fallbacks: Record<AiMode, (context: string) => string[]> = {
   bio: (context) => [`Penasaran pada hal-hal kecil, suka berbagi cerita, dan selalu terbuka untuk koneksi baru. ${context.slice(0, 90)}`.trim()],
   icebreaker: () => [
@@ -26,8 +34,7 @@ export async function generateAiText(mode: AiMode, context: string) {
       icebreaker: "Buat tepat 3 pembuka percakapan berbahasa Indonesia berdasarkan profil. Hangat, tidak genit, tidak klise. Satu baris per opsi tanpa nomor.",
       replies: "Buat tepat 3 opsi balasan chat platonic berbahasa Indonesia berdasarkan konteks. Natural dan ringkas. Satu baris per opsi tanpa nomor.",
     };
-    const response = await client.models.generateContent({
-      model: process.env.GEMINI_MODEL || "gemini-3.8-flash",
+    const request = {
       contents: context.slice(0, 4000),
       config: {
         systemInstruction: instructions[mode],
@@ -40,7 +47,13 @@ export async function generateAiText(mode: AiMode, context: string) {
           { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
         ],
       },
-    });
+    };
+    let response;
+    try { response = await client.models.generateContent({ ...request, model: primaryModel() }); }
+    catch (error) {
+      if (!isTemporaryGeminiError(error) || primaryModel() === backupModel) throw error;
+      response = await client.models.generateContent({ ...request, model: backupModel });
+    }
     const output = response.text?.trim();
     if (!output) return { suggestions: fallbacks[mode](context), fallback: true };
     const lines = output.split("\n").map((line) => line.replace(/^[-*\d.)\s]+/, "").trim()).filter(Boolean);
@@ -57,8 +70,7 @@ export async function isMessageAllowed(text: string) {
   if (!process.env.GEMINI_API_KEY || !text.trim()) return true;
   const client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   try {
-    const result = await client.models.generateContent({
-      model: process.env.GEMINI_MODEL || "gemini-3.8-flash",
+    const request = {
       contents: `Nilai pesan chat pertemanan berikut. Jawab hanya SAFE atau UNSAFE. UNSAFE bila berisi ancaman, pelecehan, kebencian, ajakan seksual eksplisit, meminta data pribadi sensitif, atau spam berbahaya.\n\nPesan: ${text.slice(0, 2000)}`,
       config: {
         maxOutputTokens: 8,
@@ -70,7 +82,13 @@ export async function isMessageAllowed(text: string) {
           { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE },
         ],
       },
-    });
+    };
+    let result;
+    try { result = await client.models.generateContent({ ...request, model: primaryModel() }); }
+    catch (error) {
+      if (!isTemporaryGeminiError(error) || primaryModel() === backupModel) throw error;
+      result = await client.models.generateContent({ ...request, model: backupModel });
+    }
     return result.text?.trim().toUpperCase() === "SAFE";
   } catch {
     return true;

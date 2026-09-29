@@ -3,6 +3,7 @@ import '../main.dart';
 import '../services/api_service.dart';
 import '../widgets/profile_image.dart';
 import 'home_shell.dart';
+import 'profile_editor_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -11,8 +12,8 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final email = TextEditingController(text: 'nara@sapa.app');
-  final password = TextEditingController(text: 'SapaDemo123!');
+  final email = TextEditingController();
+  final password = TextEditingController();
   final name = TextEditingController();
   final username = TextEditingController();
   bool register = false, obscure = true, busy = false;
@@ -31,9 +32,11 @@ class _LoginScreenState extends State<LoginScreen> {
         await ApiService.instance.login(email.text.trim(), password.text);
       }
       if (mounted) {
+        final profile = await ApiService.instance.profile();
+        if (!mounted) return;
         Navigator.of(
           context,
-        ).pushReplacement(MaterialPageRoute(builder: (_) => const HomeShell()));
+        ).pushReplacement(MaterialPageRoute(builder: (_) => profile?.onboardingCompleted == true ? const HomeShell() : const ProfileEditorScreen(isOnboarding: true)));
       }
     } catch (error) {
       if (mounted) {
@@ -45,34 +48,6 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         setState(() => busy = false);
       }
-    }
-  }
-
-  Future<void> forgotPassword() async {
-    if (email.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Isi emailmu terlebih dahulu.')),
-      );
-      return;
-    }
-    setState(() => busy = true);
-    try {
-      final message = await ApiService.instance.forgotPassword(
-        email.text.trim(),
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(message)));
-      }
-    } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('$error')));
-      }
-    } finally {
-      if (mounted) setState(() => busy = false);
     }
   }
 
@@ -209,20 +184,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
             ),
-            if (!register)
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: busy ? null : forgotPassword,
-                  child: const Text(
-                    'Lupa kata sandi?',
-                    style: TextStyle(
-                      color: violet,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ),
             const SizedBox(height: 17),
             FilledButton.icon(
               onPressed: busy ? null : submit,
@@ -259,22 +220,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   color: violet,
                   fontWeight: FontWeight.w800,
                 ),
-              ),
-            ),
-            OutlinedButton(
-              onPressed: () => Navigator.of(context).pushReplacement(
-                MaterialPageRoute(builder: (_) => const HomeShell()),
-              ),
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size.fromHeight(48),
-                side: const BorderSide(color: Color(0x2217233D)),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(17),
-                ),
-              ),
-              child: const Text(
-                'Lihat preview tanpa login',
-                style: TextStyle(color: ink, fontWeight: FontWeight.w700),
               ),
             ),
           ],

@@ -7,6 +7,6 @@ void main() {
     await tester.pump();
     expect(find.text('SAPA'), findsOneWidget);
     expect(find.text('Masuk ke SAPA'), findsOneWidget);
-    expect(find.text('Lihat preview tanpa login'), findsOneWidget);
+    expect(find.text('Belum punya akun? Daftar gratis'), findsOneWidget);
   });
 }

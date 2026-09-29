@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   interests TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
   looking_for TEXT[] NOT NULL DEFAULT ARRAY['Teman baru']::TEXT[],
   bio TEXT NOT NULL DEFAULT '',
-  photo_url TEXT NOT NULL DEFAULT '/people/nara.svg',
+  photo_url TEXT NOT NULL DEFAULT '/people/default.svg',
   profile_prompts JSONB NOT NULL DEFAULT '[]'::JSONB,
   is_visible BOOLEAN NOT NULL DEFAULT TRUE,
   onboarding_completed BOOLEAN NOT NULL DEFAULT FALSE,

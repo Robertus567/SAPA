@@ -12,6 +12,12 @@ class Profile {
     this.sharedInterests = const [],
     this.compatibility = 86,
     this.isOnline = false,
+    this.birthDate,
+    this.languages = const ['Indonesia'],
+    this.hobbies = const [],
+    this.lookingFor = const ['Teman baru'],
+    this.isVisible = true,
+    this.onboardingCompleted = false,
   });
 
   final String id;
@@ -26,6 +32,12 @@ class Profile {
   final List<String> sharedInterests;
   final int compatibility;
   final bool isOnline;
+  final String? birthDate;
+  final List<String> languages;
+  final List<String> hobbies;
+  final List<String> lookingFor;
+  final bool isVisible;
+  final bool onboardingCompleted;
 
   factory Profile.fromJson(Map<String, dynamic> json) => Profile(
     id: '${json['id']}',
@@ -35,11 +47,34 @@ class Profile {
     city: '${json['city'] ?? ''}',
     mbti: '${json['mbti'] ?? 'INFP'}',
     bio: '${json['bio'] ?? ''}',
-    photoUrl: '${json['photoUrl'] ?? 'assets/people/nara.svg'}',
+    photoUrl: '${json['photoUrl'] ?? '/people/default.svg'}',
     interests: List<String>.from(json['interests'] ?? const []),
     sharedInterests: List<String>.from(json['sharedInterests'] ?? const []),
     compatibility: (json['compatibility'] as num?)?.toInt() ?? 86,
     isOnline: json['isOnline'] == true,
+    birthDate: json['birthDate'] as String?,
+    languages: List<String>.from(json['languages'] ?? const ['Indonesia']),
+    hobbies: List<String>.from(json['hobbies'] ?? const []),
+    lookingFor: List<String>.from(json['lookingFor'] ?? const ['Teman baru']),
+    isVisible: json['isVisible'] != false,
+    onboardingCompleted: json['onboardingCompleted'] == true,
+  );
+}
+
+class SapaNotification {
+  const SapaNotification({required this.id, required this.type, required this.actorName, required this.actorPhoto, required this.payload, required this.createdAt, this.readAt});
+  final String id;
+  final String type;
+  final String actorName;
+  final String actorPhoto;
+  final Map<String, dynamic> payload;
+  final String createdAt;
+  final String? readAt;
+  factory SapaNotification.fromJson(Map<String, dynamic> json) => SapaNotification(
+    id: '${json['id']}', type: '${json['type']}', actorName: '${json['actorName'] ?? 'Seseorang'}',
+    actorPhoto: '${json['actorPhoto'] ?? '/people/default.svg'}',
+    payload: Map<String, dynamic>.from(json['payload'] ?? const {}),
+    createdAt: '${json['createdAt']}', readAt: json['readAt'] as String?,
   );
 }
 

@@ -2,18 +2,12 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { isMessageAllowed } from "@/lib/ai";
-import { apiError, db, isDatabaseConfigured } from "@/lib/db";
+import { apiError, db } from "@/lib/db";
 
 const messageSchema = z.object({
   body: z.string().max(2000).default(""),
   imageUrl: z.string().max(1_300_000).nullable().optional(),
 }).refine((value) => value.body.trim() || value.imageUrl, "Pesan tidak boleh kosong.");
-
-const demoMessages = [
-  { id: "m1", senderId: "demo-bima", body: "Hai Nara! Aku lihat kita sama-sama suka film dan musik indie 👋", createdAt: new Date(Date.now() - 420000).toISOString(), readAt: new Date().toISOString() },
-  { id: "m2", senderId: "demo-viewer", body: "Hai Bima! Iya, kombinasi yang susah ditolak 😄", createdAt: new Date(Date.now() - 300000).toISOString(), readAt: new Date().toISOString() },
-  { id: "m3", senderId: "demo-bima", body: "Film terakhir yang bikin kamu kepikiran apa?", createdAt: new Date(Date.now() - 120000).toISOString(), readAt: null },
-];
 
 async function assertMember(sql: ReturnType<typeof db>, conversationId: string, userId: string) {
   const rows = await sql`
@@ -39,12 +33,12 @@ async function conversationDetails(sql: ReturnType<typeof db>, conversationId: s
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
-    if (!isDatabaseConfigured()) return Response.json({ messages: demoMessages, currentUserId: "demo-viewer", peer: { userId: "demo-bima", matchId: "demo-match", fullName: "Bima Ardhana", mbti: "ENFJ", photoUrl: "/people/bima.svg" }, demo: true });
     const user = await requireUser(request);
     const sql = db();
     const details = await conversationDetails(sql, id, user.id);
     if (!details) return Response.json({ error: "Percakapan tidak ditemukan." }, { status: 404 });
     await sql`UPDATE messages SET read_at=NOW() WHERE conversation_id=${id} AND sender_id<>${user.id} AND read_at IS NULL`;
+    await sql`UPDATE notifications SET read_at=NOW() WHERE user_id=${user.id} AND type='message' AND payload->>'conversationId'=${id} AND read_at IS NULL`;
     const rows = await sql`
       SELECT id, sender_id, body, image_url, read_at, created_at FROM messages
       WHERE conversation_id=${id} ORDER BY created_at ASC LIMIT 200
@@ -63,22 +57,21 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   try {
     const { id } = await context.params;
     const input = messageSchema.parse(await request.json());
+    const user = await requireUser(request);
     if (input.imageUrl && !/^(data:image\/(png|jpe?g|webp);base64,|https:\/\/)/i.test(input.imageUrl)) {
       return Response.json({ error: "Format gambar tidak didukung." }, { status: 400 });
     }
-    if (!(await isMessageAllowed(input.body))) return Response.json({ error: "Pesan ditahan oleh sistem keamanan." }, { status: 422 });
-    if (!isDatabaseConfigured()) {
-      return Response.json({ message: { id: crypto.randomUUID(), senderId: "demo-viewer", body: input.body, imageUrl: input.imageUrl, createdAt: new Date().toISOString() }, demo: true }, { status: 201 });
-    }
-    const user = await requireUser(request);
     const sql = db();
     if (!(await assertMember(sql, id, user.id))) return Response.json({ error: "Percakapan tidak ditemukan." }, { status: 404 });
+    if (!(await isMessageAllowed(input.body))) return Response.json({ error: "Pesan ditahan oleh sistem keamanan." }, { status: 422 });
     const rows = await sql`
       INSERT INTO messages (conversation_id, sender_id, body, image_url)
       VALUES (${id}, ${user.id}, ${input.body.trim()}, ${input.imageUrl || null})
       RETURNING id, sender_id, body, image_url, read_at, created_at
     `;
     const row = rows[0];
+    const details = await conversationDetails(sql, id, user.id);
+    if (details) await sql`INSERT INTO notifications (user_id, type, payload) VALUES (${details.user_id}, 'message', jsonb_build_object('userId', ${user.id}::text, 'conversationId', ${id}::text, 'messageId', ${row.id}::text))`;
     return Response.json({ message: { id: row.id, senderId: row.sender_id, body: row.body, imageUrl: row.image_url, readAt: row.read_at, createdAt: row.created_at } }, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) return Response.json({ error: "Pesan tidak valid." }, { status: 400 });

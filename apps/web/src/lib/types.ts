@@ -15,6 +15,9 @@ export type Profile = {
   compatibility?: number;
   sharedInterests?: string[];
   isOnline?: boolean;
+  birthDate?: string | null;
+  isVisible?: boolean;
+  onboardingCompleted?: boolean;
 };
 
 export type ChatMessage = {
@@ -32,4 +35,3 @@ export type SessionUser = {
   username?: string;
   fullName?: string;
 };
-

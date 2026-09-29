@@ -26,7 +26,7 @@ class ProfileImage extends StatelessWidget {
       source,
       fit: fit,
       errorBuilder: (_, __, ___) =>
-          SvgPicture.asset('assets/people/nara.svg', fit: fit),
+          SvgPicture.asset('assets/people/default.svg', fit: fit),
     );
   }
 }

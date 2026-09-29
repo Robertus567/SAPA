@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 600" role="img" aria-label="Avatar SAPA">
+  <defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#e5dcff"/><stop offset="1" stop-color="#ffcfbe"/></linearGradient><linearGradient id="shirt" x2="1" y2="1"><stop stop-color="#7157d9"/><stop offset="1" stop-color="#17233d"/></linearGradient></defs>
+  <rect width="480" height="600" fill="url(#bg)"/>
+  <circle cx="410" cy="110" r="115" fill="#ffffff" opacity=".28"/><circle cx="60" cy="520" r="150" fill="#ffffff" opacity=".18"/>
+  <path d="M45 600c10-126 82-196 195-196s185 70 195 196" fill="url(#shirt)"/>
+  <path d="M144 229c0-91 38-142 96-142s96 51 96 142v46c0 91-38 146-96 146s-96-55-96-146z" fill="#f5b996"/>
+  <path d="M137 246c-9-112 27-170 103-170 72 0 115 60 103 170-12-21-19-53-20-79-49 28-97 33-170 29-2 19-5 37-16 50z" fill="#17233d"/>
+  <circle cx="203" cy="266" r="5" fill="#17233d"/><circle cx="277" cy="266" r="5" fill="#17233d"/>
+  <path d="M217 326c16 13 31 13 47 0" fill="none" stroke="#a55850" stroke-width="6" stroke-linecap="round"/>
+  <path d="M171 427c29 38 107 38 138 0" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="398" cy="494" r="37" fill="#c9eb77"/><path d="m383 494 10 10 20-22" fill="none" stroke="#17233d" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

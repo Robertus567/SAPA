@@ -1,11 +1,14 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import '../data/demo_data.dart';
 import '../main.dart';
 import '../models/profile.dart';
 import '../services/api_service.dart';
+import '../services/local_alerts.dart';
 import '../widgets/profile_image.dart';
+import 'activity_screens.dart';
 import 'chat_screen.dart';
 import 'login_screen.dart';
+import 'profile_editor_screen.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
@@ -15,12 +18,53 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   int index = 0;
+  Timer? notificationTimer;
+  Set<String>? seenNotifications;
+  int unreadNotifications = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkProfile();
+    LocalAlerts.initialize();
+    _pollNotifications();
+    notificationTimer = Timer.periodic(const Duration(seconds: 10), (_) => _pollNotifications());
+  }
+
+  @override
+  void dispose() { notificationTimer?.cancel(); super.dispose(); }
+
+  Future<void> _checkProfile() async {
+    try {
+      final profile = await ApiService.instance.profile();
+      if (!mounted) return;
+      if (profile == null || !profile.onboardingCompleted) {
+        Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const ProfileEditorScreen(isOnboarding: true)), (_) => false);
+      }
+    } catch (_) { /* network state is shown in each page */ }
+  }
+
+  Future<void> _pollNotifications() async {
+    try {
+      final values = await ApiService.instance.notifications();
+      if (!mounted) return;
+      final unread = values.where((item) => item.readAt == null).toList();
+      if (seenNotifications != null) {
+        for (final item in unread) { if (!seenNotifications!.contains(item.id)) await LocalAlerts.show(item); }
+      }
+      seenNotifications = values.map((item) => item.id).toSet();
+      setState(() => unreadNotifications = unread.length);
+    } catch (_) { /* app remains usable when temporarily offline */ }
+  }
+
   @override
   Widget build(BuildContext context) {
     final pages = [
       const DiscoverScreen(),
+      const LikesScreen(),
       const MatchesScreen(),
-      const ProfileScreen(),
+      NotificationsScreen(onOpenLikes: () => setState(() => index = 1)),
+      const ProfileEditorScreen(),
     ];
     return Scaffold(
       body: IndexedStack(index: index, children: pages),
@@ -47,17 +91,27 @@ class _HomeShellState extends State<HomeShell> {
             indicatorColor: lime.withValues(alpha: .16),
             selectedIndex: index,
             onDestinationSelected: (value) => setState(() => index = value),
-            labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-            destinations: const [
+            labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
+            destinations: [
               NavigationDestination(
                 icon: Icon(Icons.explore_outlined, color: Colors.white54),
                 selectedIcon: Icon(Icons.explore_rounded, color: lime),
                 label: 'Discover',
               ),
               NavigationDestination(
+                icon: const Icon(Icons.favorite_border_rounded, color: Colors.white54),
+                selectedIcon: const Icon(Icons.favorite_rounded, color: lime),
+                label: 'Likes',
+              ),
+              NavigationDestination(
                 icon: Icon(Icons.forum_outlined, color: Colors.white54),
                 selectedIcon: Icon(Icons.forum_rounded, color: lime),
                 label: 'Pesan',
+              ),
+              NavigationDestination(
+                icon: Badge(isLabelVisible: unreadNotifications > 0, label: Text('$unreadNotifications'), child: const Icon(Icons.notifications_none_rounded, color: Colors.white54)),
+                selectedIcon: const Icon(Icons.notifications_rounded, color: lime),
+                label: 'Notifikasi',
               ),
               NavigationDestination(
                 icon: Icon(Icons.person_outline_rounded, color: Colors.white54),
@@ -79,27 +133,26 @@ class DiscoverScreen extends StatefulWidget {
 }
 
 class _DiscoverScreenState extends State<DiscoverScreen> {
-  List<Profile> profiles = demoProfiles;
+  List<Profile> profiles = [];
   int current = 0;
   bool loading = true;
   String filter = '';
+  String? error;
+  Profile? viewer;
 
   @override
   void initState() {
     super.initState();
     load();
+    ApiService.instance.profile().then((value) { if (mounted) setState(() => viewer = value); }).catchError((_) {});
   }
 
   Future<void> load([String? mbti]) async {
     setState(() => loading = true);
     try {
       final result = await ApiService.instance.discover(mbti: mbti);
-      if (result.isNotEmpty && mounted) {
-        setState(() => profiles = result);
-      }
-    } catch (_) {
-      /* preview data stays usable */
-    }
+      if (mounted) setState(() { profiles = result; error = null; });
+    } catch (caught) { if (mounted) setState(() => error = '$caught'); }
     if (mounted) {
       setState(() {
         loading = false;
@@ -109,16 +162,16 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
   }
 
   Future<void> like({bool superLike = false}) async {
-    if (profiles.isEmpty) {
+    if (current >= profiles.length) {
       return;
     }
     final profile = profiles[current % profiles.length];
     try {
-      final result = await ApiService.instance.like(profile.id);
+      final result = await ApiService.instance.like(profile.id, superLike: superLike);
       if (result['matched'] == true && mounted) {
         final matchedItem = MatchItem(
-          id: '${result['matchId'] ?? 'demo-match'}',
-          conversationId: '${result['conversationId'] ?? 'demo'}',
+          id: '${result['matchId']}',
+          conversationId: '${result['conversationId']}',
           userId: profile.id,
           fullName: profile.fullName,
           mbti: profile.mbti,
@@ -128,50 +181,75 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
         await showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (_) => MatchDialog(profile: profile, match: matchedItem),
+          builder: (_) => MatchDialog(profile: profile, match: matchedItem, viewerPhoto: viewer?.photoUrl ?? '/people/default.svg'),
         );
       }
-    } catch (_) {
-      if (profile.id == 'demo-bima' && mounted) {
-        await showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (_) =>
-              MatchDialog(profile: profile, match: demoMatches.first),
-        );
-      }
+      if (mounted) setState(() => current++);
+    } catch (caught) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$caught')));
     }
-    if (mounted) {
-      setState(() => current++);
-    }
+  }
+
+  void openDetails(Profile profile) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: cream,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+      builder: (sheetContext) => FractionallySizedBox(
+        heightFactor: .75,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(22),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Center(child: Container(width: 38, height: 4, decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(99)))),
+            const SizedBox(height: 20),
+            Center(child: ClipRRect(borderRadius: BorderRadius.circular(26), child: SizedBox(width: 112, height: 112, child: ProfileImage(profile.photoUrl)))),
+            const SizedBox(height: 17),
+            Text('${profile.fullName}, ${profile.age}', style: const TextStyle(fontFamily: 'serif', fontSize: 29, fontWeight: FontWeight.w700)),
+            Text('${profile.mbti} · ${profile.city}', style: const TextStyle(color: violet, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 17),
+            Text(profile.bio, style: const TextStyle(height: 1.55, fontSize: 14)),
+            const SizedBox(height: 18),
+            Wrap(spacing: 7, runSpacing: 7, children: profile.interests.map((item) => Chip(label: Text(item))).toList()),
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: () { Navigator.pop(sheetContext); like(); },
+              icon: const Icon(Icons.favorite_rounded), label: const Text('Kirim like'),
+              style: FilledButton.styleFrom(backgroundColor: coral, minimumSize: const Size.fromHeight(52)),
+            ),
+          ]),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final profile = profiles[current % profiles.length];
+    final profile = current < profiles.length ? profiles[current] : null;
     return SafeArea(
       bottom: false,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(17, 17, 17, 0),
-        child: Column(
+        child: SingleChildScrollView(child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 const SapaBrand(),
                 const Spacer(),
-                IconButton.filledTonal(
-                  onPressed: () {},
-                  icon: const Icon(Icons.search_rounded),
-                ),
+                IconButton.filledTonal(onPressed: () async {
+                  final query = await showSearch<String?>(context: context, delegate: _ProfileSearch(profiles));
+                  if (query != null && mounted) setState(() { profiles = profiles.where((item) => item.fullName.toLowerCase().contains(query.toLowerCase()) || item.city.toLowerCase().contains(query.toLowerCase())).toList(); current = 0; });
+                }, icon: const Icon(Icons.search_rounded)),
                 const SizedBox(width: 4),
                 Stack(
                   children: [
-                    const CircleAvatar(
+                    CircleAvatar(
                       radius: 22,
                       backgroundColor: Colors.white,
                       child: ClipOval(
-                        child: ProfileImage('assets/people/nara.svg'),
+                        child: ProfileImage(viewer?.photoUrl ?? '/people/default.svg'),
                       ),
                     ),
                     Positioned(
@@ -192,8 +270,8 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
               ],
             ),
             const SizedBox(height: 19),
-            const Text(
-              'SELAMAT DATANG, NARA',
+            Text(
+              'SELAMAT DATANG, ${(viewer?.fullName.split(' ').first ?? 'TEMAN').toUpperCase()}',
               style: TextStyle(
                 color: coral,
                 letterSpacing: 1.6,
@@ -239,11 +317,12 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
               ),
             ),
             const SizedBox(height: 13),
-            Expanded(
+            SizedBox(
+              height: MediaQuery.sizeOf(context).height < 730 ? 390 : MediaQuery.sizeOf(context).height - 340,
               child: AnimatedOpacity(
                 opacity: loading ? .62 : 1,
                 duration: const Duration(milliseconds: 220),
-                child: ProfileCard(profile: profile),
+                child: profile == null ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(loading ? Icons.hourglass_empty_rounded : Icons.auto_awesome_rounded, size: 46, color: violet), const SizedBox(height: 12), Text(loading ? 'Mencari teman baru…' : error ?? 'Semua profil sudah kamu lihat', textAlign: TextAlign.center, style: const TextStyle(fontFamily: 'serif', fontSize: 20)), const SizedBox(height: 8), TextButton(onPressed: () => load(filter), child: const Text('Muat ulang'))])) : ProfileCard(profile: profile, onOpen: () => openDetails(profile)),
               ),
             ),
             Padding(
@@ -254,7 +333,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                   ActionCircle(
                     icon: Icons.close_rounded,
                     color: violet,
-                    onTap: () => setState(() => current++),
+                    onTap: () { if (profile != null) setState(() => current++); },
                   ),
                   const SizedBox(width: 15),
                   ActionCircle(
@@ -274,17 +353,17 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 72),
           ],
-        ),
+        )),
       ),
     );
   }
 }
 
 class ProfileCard extends StatelessWidget {
-  const ProfileCard({super.key, required this.profile});
+  const ProfileCard({super.key, required this.profile, required this.onOpen});
   final Profile profile;
+  final VoidCallback onOpen;
   @override
   Widget build(BuildContext context) => Hero(
     tag: 'profile-${profile.id}',
@@ -417,7 +496,10 @@ class ProfileCard extends StatelessWidget {
                           ],
                         ),
                       ),
-                      Container(
+                      InkWell(
+                        onTap: onOpen,
+                        customBorder: const CircleBorder(),
+                        child: Container(
                         width: 38,
                         height: 38,
                         decoration: BoxDecoration(
@@ -428,6 +510,7 @@ class ProfileCard extends StatelessWidget {
                           Icons.north_east_rounded,
                           color: Colors.white,
                           size: 17,
+                        ),
                         ),
                       ),
                     ],
@@ -548,9 +631,10 @@ class ActionCircle extends StatelessWidget {
 }
 
 class MatchDialog extends StatefulWidget {
-  const MatchDialog({super.key, required this.profile, required this.match});
+  const MatchDialog({super.key, required this.profile, required this.match, required this.viewerPhoto});
   final Profile profile;
   final MatchItem match;
+  final String viewerPhoto;
   @override
   State<MatchDialog> createState() => _MatchDialogState();
 }
@@ -563,7 +647,7 @@ class _MatchDialogState extends State<MatchDialog> {
     try {
       ideas = await ApiService.instance.ai(
         'icebreaker',
-        'Nara INFP match dengan ${widget.profile.fullName} ${widget.profile.mbti}. Minat: ${widget.profile.interests.join(', ')}',
+        'Aku baru match dengan ${widget.profile.fullName} ${widget.profile.mbti}. Minat: ${widget.profile.interests.join(', ')}',
       );
     } catch (_) {
       ideas = [
@@ -596,10 +680,10 @@ class _MatchDialogState extends State<MatchDialog> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const CircleAvatar(
+              CircleAvatar(
                 radius: 43,
                 backgroundColor: Colors.white,
-                child: ClipOval(child: ProfileImage('assets/people/nara.svg')),
+                child: ClipOval(child: ProfileImage(widget.viewerPhoto)),
               ),
               Transform.translate(
                 offset: const Offset(-7, 0),
@@ -707,18 +791,25 @@ class MatchesScreen extends StatefulWidget {
 }
 
 class _MatchesScreenState extends State<MatchesScreen> {
-  List<MatchItem> matches = demoMatches;
+  List<MatchItem> matches = [];
+  Timer? timer;
+  bool loading = true;
+  String? error;
   @override
   void initState() {
     super.initState();
     load();
+    timer = Timer.periodic(const Duration(seconds: 10), (_) => load(silent: true));
   }
 
-  Future<void> load() async {
+  @override
+  void dispose() { timer?.cancel(); super.dispose(); }
+
+  Future<void> load({bool silent = false}) async {
     try {
       final result = await ApiService.instance.matches();
-      if (result.isNotEmpty && mounted) setState(() => matches = result);
-    } catch (_) {}
+      if (mounted) setState(() { matches = result; loading = false; error = null; });
+    } catch (caught) { if (mounted && !silent) setState(() { loading = false; error = '$caught'; }); }
   }
 
   @override
@@ -726,7 +817,7 @@ class _MatchesScreenState extends State<MatchesScreen> {
     return SafeArea(
       bottom: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 18, 18, 78),
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -736,7 +827,7 @@ class _MatchesScreenState extends State<MatchesScreen> {
                 Spacer(),
                 CircleAvatar(
                   backgroundColor: Colors.white,
-                  child: Icon(Icons.search_rounded, color: ink),
+                  child: Icon(Icons.forum_outlined, color: ink),
                 ),
               ],
             ),
@@ -752,8 +843,9 @@ class _MatchesScreenState extends State<MatchesScreen> {
               style: TextStyle(color: Color(0xFF6C7486), fontSize: 11),
             ),
             const SizedBox(height: 20),
+            if (error != null) Text(error!, style: const TextStyle(color: Colors.red)),
             Expanded(
-              child: ListView.separated(
+              child: loading ? const Center(child: CircularProgressIndicator()) : matches.isEmpty ? const Center(child: Text('Belum ada match. Mulai dengan satu like yang tulus ♡', textAlign: TextAlign.center)) : RefreshIndicator(onRefresh: load, child: ListView.separated(
                 itemCount: matches.length,
                 separatorBuilder: (_, __) => const SizedBox(height: 8),
                 itemBuilder: (_, index) {
@@ -763,12 +855,12 @@ class _MatchesScreenState extends State<MatchesScreen> {
                     borderRadius: BorderRadius.circular(19),
                     child: InkWell(
                       borderRadius: BorderRadius.circular(19),
-                      onTap: () => Navigator.push(
+                      onTap: () async { await Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (_) => ChatScreen(match: item),
                         ),
-                      ),
+                      ); await load(); },
                       child: Padding(
                         padding: const EdgeInsets.all(12),
                         child: Row(
@@ -789,13 +881,15 @@ class _MatchesScreenState extends State<MatchesScreen> {
                                 children: [
                                   Row(
                                     children: [
-                                      Text(
+                                      Flexible(child: Text(
                                         item.fullName,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                         style: const TextStyle(
                                           fontSize: 12,
                                           fontWeight: FontWeight.w900,
                                         ),
-                                      ),
+                                      )),
                                       const SizedBox(width: 5),
                                       Container(
                                         padding: const EdgeInsets.symmetric(
@@ -850,7 +944,7 @@ class _MatchesScreenState extends State<MatchesScreen> {
                     ),
                   );
                 },
-              ),
+              )),
             ),
           ],
         ),
@@ -1038,7 +1132,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           FilledButton(
             onPressed: () async {
               try {
-                await ApiService.instance.updateProfile(bio.text);
+                final existing = await ApiService.instance.profile();
+                if (existing?.birthDate == null) throw ApiException('Lengkapi profil terlebih dahulu.');
+                await ApiService.instance.updateProfile({'fullName': existing!.fullName, 'birthDate': existing.birthDate, 'city': existing.city, 'country': 'Indonesia', 'mbti': existing.mbti, 'languages': existing.languages, 'hobbies': existing.hobbies, 'interests': existing.interests, 'lookingFor': existing.lookingFor, 'bio': bio.text, 'photoUrl': existing.photoUrl, 'isVisible': existing.isVisible});
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Profil tersimpan.')),
@@ -1102,4 +1198,23 @@ class Interest extends StatelessWidget {
       ),
     ),
   );
+}
+
+class _ProfileSearch extends SearchDelegate<String?> {
+  _ProfileSearch(this.profiles);
+  final List<Profile> profiles;
+  @override
+  String get searchFieldLabel => 'Cari nama atau kota';
+  @override
+  List<Widget> buildActions(BuildContext context) => [IconButton(onPressed: () => query = '', icon: const Icon(Icons.clear_rounded))];
+  @override
+  Widget buildLeading(BuildContext context) => IconButton(onPressed: () => close(context, null), icon: const Icon(Icons.arrow_back_rounded));
+  @override
+  Widget buildResults(BuildContext context) => _results(context);
+  @override
+  Widget buildSuggestions(BuildContext context) => _results(context);
+  Widget _results(BuildContext context) {
+    final found = profiles.where((item) => item.fullName.toLowerCase().contains(query.toLowerCase()) || item.city.toLowerCase().contains(query.toLowerCase())).take(8).toList();
+    return ListView(children: [for (final item in found) ListTile(leading: CircleAvatar(child: ClipOval(child: ProfileImage(item.photoUrl))), title: Text(item.fullName), subtitle: Text('${item.mbti} · ${item.city}'), onTap: () => close(context, query))]);
+  }
 }

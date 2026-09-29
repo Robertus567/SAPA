@@ -4,31 +4,28 @@
 import { ChangeEvent, FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ImagePlus, MoreHorizontal, Phone, Send, ShieldAlert, Sparkles, Video } from "lucide-react";
+import { ArrowLeft, ImagePlus, MoreHorizontal, Send, ShieldAlert, Sparkles } from "lucide-react";
 import { Brand } from "./brand";
 import type { ChatMessage } from "@/lib/types";
 
 type ChatPeer = { userId: string; matchId: string; fullName: string; mbti: string; photoUrl: string };
 
-const fallbackPeer: ChatPeer = { userId: "demo-bima", matchId: "demo-match", fullName: "Bima Ardhana", mbti: "ENFJ", photoUrl: "/people/bima.svg" };
-
-const fallbackMessages: ChatMessage[] = [
-  { id: "m1", senderId: "demo-bima", body: "Hai Nara! Aku lihat kita sama-sama suka film dan musik indie 👋", createdAt: new Date(Date.now() - 420000).toISOString(), readAt: new Date().toISOString() },
-  { id: "m2", senderId: "demo-viewer", body: "Hai Bima! Iya, kombinasi yang susah ditolak 😄", createdAt: new Date(Date.now() - 300000).toISOString(), readAt: new Date().toISOString() },
-  { id: "m3", senderId: "demo-bima", body: "Film terakhir yang bikin kamu kepikiran apa?", createdAt: new Date(Date.now() - 120000).toISOString(), readAt: null },
-];
+type MatchItem = { id: string; conversationId: string; fullName: string; photoUrl: string; lastMessage: string; unread: number };
 
 export function ChatRoom({ conversationId }: { conversationId: string }) {
   const router = useRouter();
-  const [messages, setMessages] = useState<ChatMessage[]>(fallbackMessages);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [matches, setMatches] = useState<MatchItem[]>([]);
+  const [chatSearch, setChatSearch] = useState("");
+  const [unreadOnly, setUnreadOnly] = useState(false);
   const [text, setText] = useState("");
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [aiBusy, setAiBusy] = useState(false);
   const [sending, setSending] = useState(false);
   const [notice, setNotice] = useState("");
-  const [viewerId, setViewerId] = useState("demo-viewer");
-  const [peer, setPeer] = useState<ChatPeer>(fallbackPeer);
+  const [viewerId, setViewerId] = useState("");
+  const [peer, setPeer] = useState<ChatPeer>({ userId: "", matchId: "", fullName: "Memuat percakapan…", mbti: "", photoUrl: "/people/default.svg" });
   const [safetyOpen, setSafetyOpen] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -40,20 +37,24 @@ export function ChatRoom({ conversationId }: { conversationId: string }) {
         setMessages(data.messages);
         if (data.currentUserId) setViewerId(data.currentUserId);
         if (data.peer) setPeer(data.peer);
-      }
-    } catch { /* keep the current optimistic state */ }
+      } else if (!response.ok) setNotice(data.error || "Percakapan gagal dimuat.");
+    } catch { setNotice("Koneksi terputus. Mencoba lagi…"); }
   }, [conversationId]);
+
+  const loadMatches = useCallback(async () => {
+    try { const response = await fetch("/api/matches", { cache: "no-store" }); const data = await response.json(); if (response.ok) setMatches(data.matches || []); } catch { /* chat remains usable */ }
+  }, []);
 
   useEffect(() => {
     const kickoff = window.setTimeout(() => {
       void loadMessages();
+      void loadMatches();
       const draft = new URLSearchParams(window.location.search).get("draft");
       if (draft) setText(draft);
     }, 0);
-    if (conversationId === "demo") return () => window.clearTimeout(kickoff);
-    const timer = window.setInterval(loadMessages, 3000);
+    const timer = window.setInterval(() => { void loadMessages(); void loadMatches(); }, 5000);
     return () => { window.clearTimeout(kickoff); window.clearInterval(timer); };
-  }, [conversationId, loadMessages]);
+  }, [conversationId, loadMessages, loadMatches]);
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, suggestions]);
@@ -68,14 +69,14 @@ export function ChatRoom({ conversationId }: { conversationId: string }) {
       const response = await fetch(`/api/conversations/${conversationId}/messages`, { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ body: optimistic.body, imageUrl: optimistic.imageUrl }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Pesan belum terkirim.");
-      if (conversationId !== "demo") await loadMessages();
-    } catch (error) { setNotice((error as Error).message); } finally { setSending(false); }
+      await loadMessages(); await loadMatches();
+    } catch (error) { setMessages((current) => current.filter((item) => item.id !== optimistic.id)); setText(optimistic.body); setImageUrl(optimistic.imageUrl || null); setNotice((error as Error).message); } finally { setSending(false); }
   }
 
   function chooseImage(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (file.size > 900_000) { setNotice("Ukuran gambar maksimal 900 KB untuk versi MVP."); return; }
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) || file.size > 800_000) { setNotice("Pilih JPG, PNG, atau WebP maksimal 800 KB."); return; }
     const reader = new FileReader();
     reader.onload = () => setImageUrl(String(reader.result));
     reader.readAsDataURL(file);
@@ -83,7 +84,7 @@ export function ChatRoom({ conversationId }: { conversationId: string }) {
 
   async function askGemini() {
     setAiBusy(true); setNotice("");
-    const context = messages.slice(-6).map((message) => `${message.senderId === peer.userId ? peer.fullName : "Aku"}: ${message.body}`).join("\n");
+    const context = messages.length ? messages.slice(-6).map((message) => `${message.senderId === peer.userId ? peer.fullName : "Aku"}: ${message.body}`).join("\n") : `Aku baru match dengan ${peer.fullName}. Bantu tulis sapaan pertama yang hangat.`;
     try {
       const response = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "replies", context }) });
       const data = await response.json();
@@ -106,10 +107,10 @@ export function ChatRoom({ conversationId }: { conversationId: string }) {
   }
 
   return <main className="chat-page">
-    <aside className="chat-list-panel"><Brand /><div className="chat-list-head"><h1>Pesan</h1><button>＋</button></div><label className="chat-search">⌕ <input placeholder="Cari percakapan" /></label><div className="chat-list-tabs"><button className="active">Semua</button><button>Belum dibaca <b>1</b></button></div><div className="conversation active"><img src="/people/bima.svg" alt="Bima" /><div><strong>Bima Ardhana</strong><p>Film terakhir yang bikin...</p></div><span>2m</span><b>1</b></div><div className="conversation"><img src="/people/salva.svg" alt="Salva" /><div><strong>Salva Nirmala</strong><p>Thank you rekomendasinya!</p></div><span>1h</span></div><div className="conversation"><img src="/people/keisha.svg" alt="Keisha" /><div><strong>Keisha Aulia</strong><p>Board game weekend?</p></div><span>2h</span></div></aside>
+    <aside className="chat-list-panel"><Brand /><div className="chat-list-head"><h1>Pesan</h1><Link href="/app" aria-label="Kembali ke Discover">＋</Link></div><label className="chat-search">⌕ <input value={chatSearch} onChange={(event) => setChatSearch(event.target.value)} placeholder="Cari percakapan" /></label><div className="chat-list-tabs"><button className={!unreadOnly ? "active" : ""} onClick={() => setUnreadOnly(false)}>Semua</button><button className={unreadOnly ? "active" : ""} onClick={() => setUnreadOnly(true)}>Belum dibaca <b>{matches.reduce((sum, item) => sum + item.unread, 0)}</b></button></div>{matches.filter((item) => (!unreadOnly || item.unread > 0) && item.fullName.toLowerCase().includes(chatSearch.toLowerCase())).map((item) => <Link href={`/messages/${item.conversationId}`} className={`conversation ${item.conversationId === conversationId ? "active" : ""}`} key={item.id}><img src={item.photoUrl} alt="" /><div><strong>{item.fullName}</strong><p>{item.lastMessage}</p></div>{item.unread > 0 && <b>{item.unread}</b>}</Link>)}{!matches.length && <p className="match-empty">Belum ada percakapan lain.</p>}</aside>
 
-    <section className="chat-main"><header className="chat-header"><Link href="/app" className="chat-back"><ArrowLeft /></Link><img src={peer.photoUrl} alt={peer.fullName} /><div><h2>{peer.fullName} <span>✓</span></h2><p><i /> online · {peer.mbti}</p></div><div className="chat-tools"><button title="Panggilan suara segera hadir" onClick={() => setNotice("Panggilan suara sedang kami siapkan.")}><Phone /></button><button title="Panggilan video segera hadir" onClick={() => setNotice("Panggilan video sedang kami siapkan.")}><Video /></button><div className="safety-menu-wrap"><button aria-label="Menu keamanan" aria-expanded={safetyOpen} onClick={() => setSafetyOpen(!safetyOpen)}><MoreHorizontal /></button>{safetyOpen && <div className="safety-menu"><button onClick={() => safetyAction("report")}>Laporkan akun</button><button onClick={() => safetyAction("unmatch")}>Batalkan match</button><button className="danger" onClick={() => safetyAction("block")}>Blokir akun</button></div>}</div></div></header>
-      <div className="chat-body"><div className="match-announcement"><div><img src="/people/nara.svg" alt="Nara" /><img src="/people/bima.svg" alt="Bima" /></div><Sparkles /><h3>Kalian match!</h3><p>Senin, 28 September · 94% cocok</p></div><div className="date-divider"><span>HARI INI</span></div>
+    <section className="chat-main"><header className="chat-header"><Link href="/messages" className="chat-back"><ArrowLeft /></Link><img src={peer.photoUrl} alt={peer.fullName} /><div><h2>{peer.fullName}</h2><p>{peer.mbti} · percakapan pribadi</p></div><div className="chat-tools"><div className="safety-menu-wrap"><button aria-label="Menu keamanan" aria-expanded={safetyOpen} onClick={() => setSafetyOpen(!safetyOpen)}><MoreHorizontal /></button>{safetyOpen && <div className="safety-menu"><button onClick={() => safetyAction("report")}>Laporkan akun</button><button onClick={() => safetyAction("unmatch")}>Batalkan match</button><button className="danger" onClick={() => safetyAction("block")}>Blokir akun</button></div>}</div></div></header>
+      <div className="chat-body"><div className="match-announcement"><div><img src={peer.photoUrl} alt={peer.fullName} /></div><Sparkles /><h3>Kalian match!</h3><p>Mulai percakapan dengan {peer.fullName}.</p></div><div className="date-divider"><span>PESAN</span></div>
         {messages.map((message, index) => { const mine = message.senderId === viewerId; return <div className={`message-row ${mine ? "mine" : "theirs"}`} key={message.id}>{!mine && (index === 0 || messages[index - 1]?.senderId !== message.senderId) && <img src={peer.photoUrl} alt="" />}<div className="message-wrap">{message.imageUrl && <img className="message-image" src={message.imageUrl} alt="Gambar percakapan" />}{message.body && <div className="message-bubble">{message.body}</div>}<span>{new Date(message.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}{mine && ` · ${message.readAt ? "dibaca" : "terkirim"}`}</span></div></div>; })}
         {suggestions.length > 0 && <div className="suggestion-box"><span><Sparkles size={15} /> Saran Gemini</span>{suggestions.map((suggestion) => <button key={suggestion} onClick={() => { setText(suggestion); setSuggestions([]); }}>{suggestion}</button>)}</div>}
         <div ref={endRef} />

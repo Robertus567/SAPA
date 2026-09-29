@@ -1,4 +1,3 @@
-import { DiscoveryApp } from "@/components/discovery-app";
+import { CommunityApp } from "@/components/community-app";
 
-export default function AppPage() { return <DiscoveryApp />; }
-
+export default function AppPage() { return <CommunityApp />; }
