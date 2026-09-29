@@ -139,13 +139,18 @@ class ApiService {
     String conversationId,
     String body, {
     String? imageUrl,
+    String? replyToMessageId,
   }) async {
     final data = await _request(
       'POST',
       '/api/conversations/$conversationId/messages',
-      body: {'body': body, if (imageUrl != null) 'imageUrl': imageUrl},
+      body: {'body': body, if (imageUrl != null) 'imageUrl': imageUrl, if (replyToMessageId != null) 'replyToMessageId': replyToMessageId},
     );
     return ChatMessage.fromJson(data['message'] as Map<String, dynamic>);
+  }
+
+  Future<void> deleteMessage(String conversationId, String messageId) async {
+    await _request('DELETE', '/api/conversations/$conversationId/messages/$messageId');
   }
 
   Future<void> safety({
@@ -193,6 +198,8 @@ class ApiService {
           await http
               .patch(uri, headers: _headers, body: jsonEncode(body ?? {}))
               .timeout(const Duration(seconds: 20)),
+        'DELETE' =>
+          await http.delete(uri, headers: _headers).timeout(const Duration(seconds: 20)),
         _ =>
           await http
               .get(uri, headers: _headers)

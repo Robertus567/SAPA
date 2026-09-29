@@ -118,6 +118,8 @@ class ChatMessage {
     required this.createdAt,
     this.imageUrl,
     this.readAt,
+    this.replyTo,
+    this.deletedAt,
   });
   final String id;
   final String senderId;
@@ -125,6 +127,8 @@ class ChatMessage {
   final String createdAt;
   final String? imageUrl;
   final String? readAt;
+  final ChatReply? replyTo;
+  final String? deletedAt;
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
     id: '${json['id']}',
@@ -133,5 +137,24 @@ class ChatMessage {
     createdAt: '${json['createdAt']}',
     imageUrl: json['imageUrl'] as String?,
     readAt: json['readAt'] as String?,
+    replyTo: json['replyTo'] is Map<String, dynamic> ? ChatReply.fromJson(json['replyTo'] as Map<String, dynamic>) : null,
+    deletedAt: json['deletedAt'] as String?,
+  );
+}
+
+class ChatReply {
+  const ChatReply({required this.id, required this.senderId, required this.body, required this.hasImage, this.deletedAt});
+  final String id;
+  final String senderId;
+  final String body;
+  final bool hasImage;
+  final String? deletedAt;
+
+  factory ChatReply.fromJson(Map<String, dynamic> json) => ChatReply(
+    id: '${json['id']}',
+    senderId: '${json['senderId']}',
+    body: '${json['body'] ?? ''}',
+    hasImage: json['hasImage'] == true,
+    deletedAt: json['deletedAt'] as String?,
   );
 }

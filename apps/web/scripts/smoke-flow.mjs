@@ -11,10 +11,10 @@ const base = process.env.SMOKE_BASE_URL || "http://localhost:3000";
 const sql = neon(process.env.DATABASE_URL);
 const users = [];
 
-async function request(url, { token, method = "GET", body } = {}) {
+async function request(url, { token, cookie, method = "GET", body } = {}) {
   const response = await fetch(`${base}${url}`, {
     method,
-    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(body ? { "Content-Type": "application/json" } : {}) },
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(cookie ? { Cookie: cookie } : {}), ...(body ? { "Content-Type": "application/json" } : {}) },
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await response.json();
@@ -24,17 +24,22 @@ async function request(url, { token, method = "GET", body } = {}) {
 
 async function createUser(label) {
   const suffix = randomUUID().replaceAll("-", "").slice(0, 10);
+  const password = `Smoke-${randomUUID()}`;
   const data = await request("/api/auth/register", { method: "POST", body: {
-    email: `sapa-smoke-${suffix}@example.invalid`, password: `Smoke-${randomUUID()}`,
+    email: `sapa-smoke-${suffix}@example.invalid`, password,
     fullName: `${label} SAPA`, username: `smk${suffix}`,
   } });
   users.push(data.user.id);
-  return data;
+  return { ...data, password, email: `sapa-smoke-${suffix}@example.invalid` };
 }
 
 try {
   const a = await createUser("Alya");
   const b = await createUser("Bima");
+  const webLogin = await fetch(`${base}/api/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: a.email, password: a.password }) });
+  assert.equal(webLogin.status, 200, "browser login should succeed");
+  const webCookie = webLogin.headers.get("set-cookie")?.split(";")[0];
+  assert.ok(webCookie?.startsWith("sapa_session="), "browser auth cookie should be set");
   const profile = (name, city, mbti) => ({
     fullName: name, birthDate: "2001-04-12", city, country: "Indonesia", mbti,
     languages: ["Indonesia"], hobbies: ["Film"], interests: ["Film", "Game", "Buku"],
@@ -64,13 +69,30 @@ try {
   const matches = await request("/api/matches", { token: a.token });
   assert.ok(matches.matches.some((item) => item.conversationId === secondLike.conversationId));
 
-  const sent = await request(`/api/conversations/${secondLike.conversationId}/messages`, { token: a.token, method: "POST", body: { body: "Halo Bima, suka film apa?" } });
+  const chatUrl = `/api/conversations/${secondLike.conversationId}/messages`;
+  const unsafe = await fetch(`${base}${chatUrl}`, { method: "POST", headers: { Cookie: webCookie, "Content-Type": "application/json" }, body: JSON.stringify({ body: "Tolong kirim foto telanjang" }) });
+  assert.equal(unsafe.status, 422, "unsafe content should remain blocked");
+  const sent = await request(chatUrl, { cookie: webCookie, method: "POST", body: { body: "Halo Bima, suka film apa?" } });
   assert.equal(sent.message.body, "Halo Bima, suka film apa?");
   const inbox = await request("/api/notifications", { token: b.token });
   assert.ok(inbox.notifications.some((item) => item.type === "message" && item.payload.conversationId === secondLike.conversationId));
-  const chat = await request(`/api/conversations/${secondLike.conversationId}/messages`, { token: b.token });
+  const chat = await request(chatUrl, { token: b.token });
   assert.ok(chat.messages.some((item) => item.id === sent.message.id));
   assert.equal(chat.peer.fullName, "Alya SAPA");
+  const reply = await request(chatUrl, { token: b.token, method: "POST", body: { body: "Aku suka film petualangan!", replyToMessageId: sent.message.id } });
+  assert.equal(reply.message.replyTo.id, sent.message.id);
+  const webView = await request(chatUrl, { cookie: webCookie });
+  assert.equal(webView.messages.find((item) => item.id === reply.message.id)?.replyTo?.body, sent.message.body);
+  const notSender = await fetch(`${base}${chatUrl}/${sent.message.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${b.token}` } });
+  assert.equal(notSender.status, 403, "recipient must not delete sender's message");
+  const deleted = await request(`${chatUrl}/${sent.message.id}`, { cookie: webCookie, method: "DELETE" });
+  assert.equal(deleted.deleted, true);
+  const mobileView = await request(chatUrl, { token: b.token });
+  assert.equal(mobileView.messages.find((item) => item.id === sent.message.id)?.body, "Pesan ini telah dihapus");
+  assert.ok(mobileView.messages.find((item) => item.id === sent.message.id)?.deletedAt);
+  assert.equal(mobileView.messages.find((item) => item.id === reply.message.id)?.replyTo?.body, "Pesan ini telah dihapus");
+  const replyToDeleted = await fetch(`${base}${chatUrl}`, { method: "POST", headers: { Authorization: `Bearer ${b.token}`, "Content-Type": "application/json" }, body: JSON.stringify({ body: "Balasan baru", replyToMessageId: sent.message.id }) });
+  assert.equal(replyToDeleted.status, 400, "deleted messages must not accept new replies");
   const afterRead = await request("/api/notifications", { token: b.token });
   assert.ok(afterRead.notifications.some((item) => item.type === "message" && item.readAt));
 
@@ -79,7 +101,9 @@ try {
   assert.ok(!afterUnmatch.matches.some((item) => item.id === secondLike.matchId));
   const noChat = await fetch(`${base}/api/conversations/${secondLike.conversationId}/messages`, { headers: { Authorization: `Bearer ${a.token}` } });
   assert.equal(noChat.status, 404);
-  console.log("PASS: daftar → profil → discover → like → match → chat → notifikasi → baca → unmatch");
+  const invalidChat = await fetch(`${base}/api/conversations/not-a-uuid/messages`, { headers: { Authorization: `Bearer ${a.token}` } });
+  assert.equal(invalidChat.status, 400);
+  console.log("PASS: daftar → profil → discover → like → match → chat web-cookie↔mobile-token → reply → sender-only delete → notifikasi → baca → unmatch");
   console.log(`Gemini: ${ai.fallback ? "fallback lokal (API tidak aktif)" : "respons API aktif"}`);
 } finally {
   for (const id of users) await sql`DELETE FROM users WHERE id=${id}`;

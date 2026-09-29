@@ -26,6 +26,14 @@ Buka `http://localhost:3000`. Akun, Discover, match, chat, dan notifikasi memaka
 
 5. Jalankan `npm run db:setup` **sekali** untuk memasang skema dan lima profil contoh. Jangan jalankan ulang untuk migrasi database yang sudah dipakai karena script seed dapat memperbarui akun contoh.
 
+Untuk **database Neon yang sudah berisi akun/chat**, jalankan migrasi aditif berikut dari `apps/web` sebelum memakai versi reply/hapus pesan. Perintah ini aman dijalankan ulang dan tidak mereset data:
+
+```powershell
+npm run db:migrate
+```
+
+Migrasi menambah kolom referensi balasan dan penanda pesan dihapus. Pada Neon project SAPA yang dipakai pengembangan, migrasi ini sudah dijalankan; jalankan lagi hanya bila menggunakan database lain. Jangan jalankan `db:setup` lagi untuk upgrade.
+
 Akun seed untuk menguji mutual match/chat:
 
 - `nara@sapa.app` / `SapaDemo123!`
@@ -52,10 +60,10 @@ Tanpa API key atau saat layanan sibuk, bio/icebreaker/balasan tetap punya fallba
    - `GEMINI_MODEL=gemini-3.8-flash`
    - `APP_URL=https://sapa-rpl-mbti.vercel.app`
    Jangan menambahkan prefix `NEXT_PUBLIC_` pada rahasia apa pun. `DATABASE_URL` adalah pooled connection string yang sama dari Neon; tempel **nilainya**, bukan nama variabelnya.
-4. Jika database masih kosong, jalankan `npm run db:setup` **sekali** dari `apps/web` setelah `.env.local` terisi.
+4. Jika database masih kosong, jalankan `npm run db:setup` **sekali** dari `apps/web` setelah `.env.local` terisi. Jika sudah berisi data, jalankan `npm run db:migrate` untuk skema chat baru.
 5. Push ke branch `main` atau klik Deploy pada commit terbaru. Periksa deployment baru, bukan URL deployment lama yang berstatus *Stale*.
 
-Chat dan notifikasi disimpan di Neon dan disegarkan berkala (polling). Tidak perlu server WebSocket persisten.
+Chat, balasan berkutip, penghapusan pesan, dan notifikasi disimpan di Neon yang sama untuk web dan APK, lalu disegarkan berkala (polling). Penghapusan untuk semua orang hanya boleh oleh pengirim; kutipan pesan yang dihapus berubah menjadi penanda penghapusan. Tidak perlu server WebSocket persisten.
 
 ## 5. Menjalankan Flutter
 

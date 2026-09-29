@@ -76,6 +76,8 @@ CREATE TABLE IF NOT EXISTS messages (
   sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   body TEXT NOT NULL DEFAULT '',
   image_url TEXT,
+  reply_to_message_id UUID REFERENCES messages(id) ON DELETE SET NULL,
+  deleted_at TIMESTAMPTZ,
   read_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CHECK (char_length(body) <= 2000),

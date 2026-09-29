@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
     const rows = await sql`
       SELECT m.id, m.matched_at, c.id AS conversation_id,
         p.user_id, p.full_name, p.username, p.mbti, p.photo_url,
-        (SELECT body FROM messages lm WHERE lm.conversation_id=c.id ORDER BY lm.created_at DESC LIMIT 1) AS last_message,
+        (SELECT CASE WHEN lm.deleted_at IS NOT NULL THEN 'Pesan ini telah dihapus' WHEN lm.body <> '' THEN lm.body ELSE 'Foto' END FROM messages lm WHERE lm.conversation_id=c.id ORDER BY lm.created_at DESC LIMIT 1) AS last_message,
         (SELECT COUNT(*)::int FROM messages um WHERE um.conversation_id=c.id AND um.sender_id<>${user.id} AND um.read_at IS NULL) AS unread
       FROM matches m
       JOIN conversations c ON c.match_id=m.id

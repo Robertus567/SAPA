@@ -1,4 +1,4 @@
-import { GoogleGenAI, HarmBlockThreshold, HarmCategory } from "@google/genai";
+import { GoogleGenAI, HarmBlockThreshold, HarmCategory, ThinkingLevel } from "@google/genai";
 
 export type AiMode = "bio" | "icebreaker" | "replies";
 
@@ -73,7 +73,8 @@ export async function isMessageAllowed(text: string) {
     const request = {
       contents: `Nilai pesan chat pertemanan berikut. Jawab hanya SAFE atau UNSAFE. UNSAFE bila berisi ancaman, pelecehan, kebencian, ajakan seksual eksplisit, meminta data pribadi sensitif, atau spam berbahaya.\n\nPesan: ${text.slice(0, 2000)}`,
       config: {
-        maxOutputTokens: 8,
+        maxOutputTokens: 64,
+        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
         temperature: 0,
         safetySettings: [
           { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE },
@@ -89,7 +90,8 @@ export async function isMessageAllowed(text: string) {
       if (!isTemporaryGeminiError(error) || primaryModel() === backupModel) throw error;
       result = await client.models.generateContent({ ...request, model: backupModel });
     }
-    return result.text?.trim().toUpperCase() === "SAFE";
+    const verdict = result.text?.trim().toUpperCase().match(/^(SAFE|UNSAFE)\b/)?.[1];
+    return verdict === "SAFE";
   } catch {
     return true;
   }

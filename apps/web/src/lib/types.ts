@@ -25,6 +25,14 @@ export type ChatMessage = {
   senderId: string;
   body: string;
   imageUrl?: string | null;
+  replyTo?: {
+    id: string;
+    senderId: string;
+    body: string;
+    hasImage: boolean;
+    deletedAt?: string | null;
+  } | null;
+  deletedAt?: string | null;
   createdAt: string;
   readAt?: string | null;
 };
