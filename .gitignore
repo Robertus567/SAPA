@@ -1,0 +1,27 @@
+# Secrets
+**/.env
+**/.env.local
+**/.env.*.local
+
+# Next.js / Node
+**/node_modules/
+**/.next/
+**/out/
+
+# Flutter / Android
+**/.dart_tool/
+**/.flutter-plugins*
+**/build/
+**/android/local.properties
+**/*.iml
+
+# Editors, OS, and local QA
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+tmp/
+
+# Keep the ready-to-install release artifact
+!release/
+!release/SAPA-android-preview.apk
