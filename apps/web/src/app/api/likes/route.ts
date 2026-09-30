@@ -35,8 +35,8 @@ export async function POST(request: NextRequest) {
     if (!target[0]) return Response.json({ error: "Profil ini tidak tersedia." }, { status: 404 });
     const inserted = await sql`INSERT INTO likes (from_user, to_user) VALUES (${user.id}, ${input.targetUserId}) ON CONFLICT DO NOTHING RETURNING id`;
     if (!inserted[0]) {
-      const existing = await sql`SELECT m.id, c.id AS conversation_id FROM matches m JOIN conversations c ON c.match_id=m.id WHERE m.is_active=TRUE AND ((m.user_a=${user.id} AND m.user_b=${input.targetUserId}) OR (m.user_a=${input.targetUserId} AND m.user_b=${user.id})) LIMIT 1`;
-      return Response.json({ liked: true, alreadyLiked: true, matched: Boolean(existing[0]), matchId: existing[0]?.id, conversationId: existing[0]?.conversation_id });
+      const existing = await sql`SELECT m.id, c.id AS conversation_id, m.is_mutual FROM matches m JOIN conversations c ON c.match_id=m.id WHERE m.is_active=TRUE AND ((m.user_a=${user.id} AND m.user_b=${input.targetUserId}) OR (m.user_a=${input.targetUserId} AND m.user_b=${user.id})) LIMIT 1`;
+      return Response.json({ liked: true, alreadyLiked: true, matched: existing[0]?.is_mutual === true, matchId: existing[0]?.id, conversationId: existing[0]?.conversation_id });
     }
     const reciprocal = await sql`SELECT 1 FROM likes WHERE from_user=${input.targetUserId} AND to_user=${user.id} LIMIT 1`;
     if (!reciprocal[0]) {
@@ -51,13 +51,13 @@ export async function POST(request: NextRequest) {
       LIMIT 1
     `;
     const matchId = matches[0].id;
-    const reactivated = !created[0] ? await sql`UPDATE matches SET is_active=TRUE, matched_at=NOW() WHERE id=${matchId} AND is_active=FALSE RETURNING id` : [];
+    const upgraded = !created[0] ? await sql`UPDATE matches SET is_active=TRUE, is_mutual=TRUE, matched_at=NOW() WHERE id=${matchId} AND (is_active=FALSE OR is_mutual=FALSE) RETURNING id` : [];
     const conversations = await sql`
       INSERT INTO conversations (match_id) VALUES (${matchId})
       ON CONFLICT (match_id) DO UPDATE SET match_id=EXCLUDED.match_id
       RETURNING id
     `;
-    if (created[0] || reactivated[0]) await sql`
+    if (created[0] || upgraded[0]) await sql`
       INSERT INTO notifications (user_id, type, payload) VALUES
       (${user.id}, 'match', jsonb_build_object('matchId', ${matchId}::text, 'conversationId', ${conversations[0].id}::text, 'userId', ${input.targetUserId}::text)),
       (${input.targetUserId}, 'match', jsonb_build_object('matchId', ${matchId}::text, 'conversationId', ${conversations[0].id}::text, 'userId', ${user.id}::text))

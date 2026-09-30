@@ -83,8 +83,9 @@ class ApiService {
     return '${data['message'] ?? 'Periksa emailmu untuk tautan reset.'}';
   }
 
-  Future<List<Profile>> discover({String? mbti}) async {
-    final suffix = mbti == null || mbti.isEmpty ? '' : '?mbti=$mbti';
+  Future<List<Profile>> discover({String? mbti, String? query}) async {
+    final params = <String, String>{if (mbti != null && mbti.isNotEmpty) 'mbti': mbti, if (query != null && query.trim().isNotEmpty) 'q': query.trim()};
+    final suffix = params.isEmpty ? '' : '?${Uri(queryParameters: params).query}';
     final data = await _request('GET', '/api/discover$suffix');
     return (data['profiles'] as List? ?? [])
         .map((item) => Profile.fromJson(item as Map<String, dynamic>))
@@ -93,6 +94,8 @@ class ApiService {
 
   Future<Map<String, dynamic>> like(String userId, {bool superLike = false}) =>
       _request('POST', '/api/likes', body: {'targetUserId': userId, 'superLike': superLike});
+  Future<Map<String, dynamic>> comment(String userId, String body) =>
+      _request('POST', '/api/comments', body: {'targetUserId': userId, 'body': body});
   Future<List<Map<String, dynamic>>> incomingLikes() async {
     final data = await _request('GET', '/api/likes');
     return (data['likes'] as List? ?? []).map((item) => Map<String, dynamic>.from(item as Map)).toList();

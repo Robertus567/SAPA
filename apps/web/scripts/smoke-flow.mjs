@@ -56,13 +56,26 @@ try {
   assert.ok(ai.suggestions.length > 0);
   const discover = await request("/api/discover", { token: a.token });
   assert.ok(discover.profiles.some((item) => item.id === b.user.id));
+  assert.ok(!(await request("/api/discover?q=Alya", { token: a.token })).profiles.some((item) => item.id === a.user.id), "own profile stays excluded");
+  assert.ok((await request("/api/discover?q=Bima", { token: a.token })).profiles.some((item) => item.id === b.user.id), "search finds other profile");
+
+  const intro = await request("/api/comments", { token: a.token, method: "POST", body: { targetUserId: b.user.id, body: "Hai Bima, film favoritmu apa?" } });
+  assert.ok(intro.conversationId);
+  const bIntroNotifications = await request("/api/notifications", { token: b.token });
+  assert.ok(bIntroNotifications.notifications.some((item) => item.type === "comment" && item.payload.conversationId === intro.conversationId));
+  const bIntroList = await request("/api/matches", { token: b.token });
+  assert.equal(bIntroList.matches.find((item) => item.conversationId === intro.conversationId)?.isMutual, false);
+  const bIntroChat = await request(`/api/conversations/${intro.conversationId}/messages`, { token: b.token });
+  assert.ok(bIntroChat.messages.some((item) => item.body === "Hai Bima, film favoritmu apa?"));
 
   const firstLike = await request("/api/likes", { token: a.token, method: "POST", body: { targetUserId: b.user.id } });
   assert.equal(firstLike.matched, false);
+  assert.ok((await request("/api/discover", { token: a.token })).profiles.some((item) => item.id === b.user.id), "liked profiles must remain discoverable");
   const bNotifications = await request("/api/notifications", { token: b.token });
   assert.ok(bNotifications.notifications.some((item) => item.type === "like" && item.payload.userId === a.user.id));
   const secondLike = await request("/api/likes", { token: b.token, method: "POST", body: { targetUserId: a.user.id } });
   assert.equal(secondLike.matched, true);
+  assert.equal(secondLike.conversationId, intro.conversationId, "a mutual like upgrades the existing intro chat");
   assert.ok(secondLike.conversationId);
   const aNotifications = await request("/api/notifications", { token: a.token });
   assert.ok(aNotifications.notifications.some((item) => item.type === "match" && item.payload.conversationId === secondLike.conversationId));
@@ -101,9 +114,11 @@ try {
   assert.ok(!afterUnmatch.matches.some((item) => item.id === secondLike.matchId));
   const noChat = await fetch(`${base}/api/conversations/${secondLike.conversationId}/messages`, { headers: { Authorization: `Bearer ${a.token}` } });
   assert.equal(noChat.status, 404);
+  const noRestart = await fetch(`${base}/api/comments`, { method: "POST", headers: { Authorization: `Bearer ${a.token}`, "Content-Type": "application/json" }, body: JSON.stringify({ targetUserId: b.user.id, body: "Coba mulai lagi" }) });
+  assert.equal(noRestart.status, 403, "a comment must not bypass an ended conversation");
   const invalidChat = await fetch(`${base}/api/conversations/not-a-uuid/messages`, { headers: { Authorization: `Bearer ${a.token}` } });
   assert.equal(invalidChat.status, 400);
-  console.log("PASS: daftar → profil → discover → like → match → chat web-cookie↔mobile-token → reply → sender-only delete → notifikasi → baca → unmatch");
+  console.log("PASS: daftar → profil → discover/search → komentar → notifikasi → like tetap muncul → match → chat web-cookie↔mobile-token → reply → sender-only delete → baca → unmatch");
   console.log(`Gemini: ${ai.fallback ? "fallback lokal (API tidak aktif)" : "respons API aktif"}`);
 } finally {
   for (const id of users) await sql`DELETE FROM users WHERE id=${id}`;

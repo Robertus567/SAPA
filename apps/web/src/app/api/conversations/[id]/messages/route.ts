@@ -35,7 +35,7 @@ async function assertMember(sql: ReturnType<typeof db>, conversationId: string, 
 
 async function conversationDetails(sql: ReturnType<typeof db>, conversationId: string, userId: string) {
   const rows = await sql`
-    SELECT m.id AS match_id, p.user_id, p.full_name, p.mbti, p.photo_url, viewer.mbti AS viewer_mbti
+    SELECT m.id AS match_id, m.is_mutual, p.user_id, p.full_name, p.mbti, p.photo_url, viewer.mbti AS viewer_mbti
     FROM conversations c
     JOIN matches m ON m.id=c.match_id
     JOIN profiles p ON p.user_id=CASE WHEN m.user_a=${userId} THEN m.user_b ELSE m.user_a END
@@ -56,7 +56,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const details = await conversationDetails(sql, id, user.id);
     if (!details) return Response.json({ error: "Percakapan tidak ditemukan." }, { status: 404 });
     await sql`UPDATE messages SET read_at=NOW() WHERE conversation_id=${id} AND sender_id<>${user.id} AND read_at IS NULL`;
-    await sql`UPDATE notifications SET read_at=NOW() WHERE user_id=${user.id} AND type='message' AND payload->>'conversationId'=${id} AND read_at IS NULL`;
+    await sql`UPDATE notifications SET read_at=NOW() WHERE user_id=${user.id} AND type IN ('message', 'comment') AND payload->>'conversationId'=${id} AND read_at IS NULL`;
     const rows = await sql`
       SELECT m.id, m.sender_id, m.body, m.image_url, m.reply_to_message_id, m.deleted_at, m.read_at, m.created_at,
         r.sender_id AS reply_sender_id, r.body AS reply_body, r.image_url AS reply_image_url, r.deleted_at AS reply_deleted_at
@@ -66,7 +66,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       ) m LEFT JOIN messages r ON r.id=m.reply_to_message_id
       ORDER BY m.created_at ASC, m.id ASC
     `;
-    return Response.json({ messages: rows.map(rowToMessage), currentUserId: user.id, currentUserMbti: String(details.viewer_mbti), peer: { userId: String(details.user_id), matchId: String(details.match_id), fullName: String(details.full_name), mbti: String(details.mbti), photoUrl: String(details.photo_url) } });
+    return Response.json({ messages: rows.map(rowToMessage), currentUserId: user.id, currentUserMbti: String(details.viewer_mbti), peer: { userId: String(details.user_id), matchId: String(details.match_id), isMutual: details.is_mutual === true, fullName: String(details.full_name), mbti: String(details.mbti), photoUrl: String(details.photo_url) } });
   } catch (error) {
     if ((error as Error).message === "UNAUTHORIZED") return Response.json({ error: "Silakan masuk." }, { status: 401 });
     return apiError(error);

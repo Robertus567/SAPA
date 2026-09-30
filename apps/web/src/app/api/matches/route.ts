@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
     const user = await requireUser(request);
     const sql = db();
     const rows = await sql`
-      SELECT m.id, m.matched_at, c.id AS conversation_id,
+      SELECT m.id, m.matched_at, m.is_mutual, c.id AS conversation_id,
         p.user_id, p.full_name, p.username, p.mbti, p.photo_url,
         (SELECT CASE WHEN lm.deleted_at IS NOT NULL THEN 'Pesan ini telah dihapus' WHEN lm.body <> '' THEN lm.body ELSE 'Foto' END FROM messages lm WHERE lm.conversation_id=c.id ORDER BY lm.created_at DESC LIMIT 1) AS last_message,
         (SELECT COUNT(*)::int FROM messages um WHERE um.conversation_id=c.id AND um.sender_id<>${user.id} AND um.read_at IS NULL) AS unread
@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     return Response.json({ matches: rows.map((row) => ({
       id: String(row.id), conversationId: String(row.conversation_id), userId: String(row.user_id),
       fullName: String(row.full_name), username: String(row.username), mbti: String(row.mbti), photoUrl: String(row.photo_url),
-      lastMessage: String(row.last_message ?? "Kalian baru saja match. Mulai percakapan!"), unread: Number(row.unread ?? 0), matchedAt: row.matched_at,
+      lastMessage: String(row.last_message ?? (row.is_mutual ? "Kalian baru saja match. Mulai percakapan!" : "Sapaan baru. Mulai percakapan!")), unread: Number(row.unread ?? 0), matchedAt: row.matched_at, isMutual: row.is_mutual === true,
     })) });
   } catch (error) {
     if ((error as Error).message === "UNAUTHORIZED") return Response.json({ error: "Silakan masuk." }, { status: 401 });

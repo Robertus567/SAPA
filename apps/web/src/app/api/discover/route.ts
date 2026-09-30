@@ -9,6 +9,7 @@ export async function GET(request: NextRequest) {
   const mbti = search.get("mbti")?.toUpperCase();
   const city = search.get("city")?.toLowerCase();
   const purpose = search.get("purpose")?.toLowerCase();
+  const query = search.get("q")?.trim().toLowerCase();
 
   try {
     const user = await userFromRequest(request);
@@ -23,8 +24,7 @@ export async function GET(request: NextRequest) {
         AND p.is_visible=TRUE
         AND p.onboarding_completed=TRUE
         AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id=${user.id} AND b.blocked_id=p.user_id) OR (b.blocker_id=p.user_id AND b.blocked_id=${user.id}))
-        AND NOT EXISTS (SELECT 1 FROM likes l WHERE l.from_user=${user.id} AND l.to_user=p.user_id)
-      ORDER BY p.last_seen DESC LIMIT 40
+      ORDER BY p.last_seen DESC
     `;
     const viewer = rowToProfile(viewerRows[0]);
     const profiles = candidateRows
@@ -35,7 +35,8 @@ export async function GET(request: NextRequest) {
       .filter((profile) =>
         (!mbti || profile.mbti === mbti) &&
         (!city || profile.city.toLowerCase().includes(city)) &&
-        (!purpose || profile.lookingFor.some((item) => item.toLowerCase().includes(purpose)))
+        (!purpose || profile.lookingFor.some((item) => item.toLowerCase().includes(purpose))) &&
+        (!query || `${profile.fullName} ${profile.username} ${profile.mbti} ${profile.city} ${profile.bio} ${profile.interests.join(" ")}`.toLowerCase().includes(query))
       )
       .sort((a, b) => (b.compatibility ?? 0) - (a.compatibility ?? 0));
     return Response.json({ profiles });

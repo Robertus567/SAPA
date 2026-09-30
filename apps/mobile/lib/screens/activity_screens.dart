@@ -112,12 +112,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const SapaBrand(), const SizedBox(height: 30),
       Row(children: [Expanded(child: Text('Kabar untukmu.', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontSize: 33))), if (items.any((item) => item.readAt == null)) TextButton(onPressed: () async { await ApiService.instance.markNotification(); await load(); }, child: const Text('Tandai dibaca'))]),
-      const SizedBox(height: 5), const Text('Like, match, dan pesan terbaru.', style: TextStyle(color: Color(0xFF687184), fontSize: 12)),
+      const SizedBox(height: 5), const Text('Like, komentar, match, dan pesan terbaru.', style: TextStyle(color: Color(0xFF687184), fontSize: 12)),
       const SizedBox(height: 18),
       if (error != null) Text(error!, style: const TextStyle(color: Colors.red)),
       Expanded(child: loading ? const Center(child: CircularProgressIndicator()) : items.isEmpty ? const _EmptyActivity(icon: Icons.notifications_none_rounded, title: 'Belum ada kabar baru.', description: 'Saat teman lain menyapamu, kabarnya akan muncul di sini.') : RefreshIndicator(onRefresh: load, child: ListView.separated(itemCount: items.length, separatorBuilder: (_, __) => const SizedBox(height: 8), itemBuilder: (_, index) {
         final item = items[index];
-        final action = item.type == 'like' ? 'menyukai profilmu' : item.type == 'spark' ? 'mengirim spark' : item.type == 'match' ? 'match denganmu' : 'mengirim pesan baru';
+        final action = item.type == 'like' ? 'menyukai profilmu' : item.type == 'spark' ? 'mengirim spark' : item.type == 'comment' ? 'mengirim komentar pembuka' : item.type == 'match' ? 'match denganmu' : 'mengirim pesan baru';
         return Material(color: item.readAt == null ? const Color(0xFFEFEAFF) : Colors.white70, borderRadius: BorderRadius.circular(18), child: InkWell(onTap: () => open(item), borderRadius: BorderRadius.circular(18), child: Padding(padding: const EdgeInsets.all(13), child: Row(children: [
           ClipRRect(borderRadius: BorderRadius.circular(14), child: SizedBox(width: 48, height: 48, child: ProfileImage(item.actorPhoto))),
           const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('${item.actorName} $action', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800)), const SizedBox(height: 3), Text(item.createdAt.split('T').first, style: const TextStyle(fontSize: 12, color: Color(0xFF788194)))])),

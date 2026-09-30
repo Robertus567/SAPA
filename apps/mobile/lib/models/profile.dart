@@ -91,6 +91,7 @@ class MatchItem {
     required this.photoUrl,
     required this.lastMessage,
     this.unread = 0,
+    this.isMutual = true,
   });
   final String id;
   final String conversationId;
@@ -100,6 +101,7 @@ class MatchItem {
   final String photoUrl;
   final String lastMessage;
   final int unread;
+  final bool isMutual;
 
   factory MatchItem.fromJson(Map<String, dynamic> json) => MatchItem(
     id: '${json['id']}',
@@ -110,6 +112,7 @@ class MatchItem {
     photoUrl: '${json['photoUrl']}',
     lastMessage: '${json['lastMessage'] ?? ''}',
     unread: (json['unread'] as num?)?.toInt() ?? 0,
+    isMutual: json['isMutual'] != false,
   );
 }
 

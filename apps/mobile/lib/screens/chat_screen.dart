@@ -358,17 +358,17 @@ class _ChatScreenState extends State<ChatScreen> {
                       size: 16,
                       color: coral,
                     ),
-                    const Text(
-                      'Kalian match!',
-                      style: TextStyle(
+                    Text(
+                      widget.match.isMutual ? 'Kalian match!' : 'Sapaan pertama',
+                      style: const TextStyle(
                         fontFamily: 'serif',
                         fontWeight: FontWeight.w700,
                         fontSize: 18,
                       ),
                     ),
-                    const Text(
-                      'Mulai percakapan yang tulus',
-                      style: TextStyle(color: Color(0xFF9298A4), fontSize: 12),
+                    Text(
+                      widget.match.isMutual ? 'Mulai percakapan yang tulus' : 'Komentar pembuka menjadi pesan privat',
+                      style: const TextStyle(color: Color(0xFF9298A4), fontSize: 12),
                     ),
                   ],
                 ),

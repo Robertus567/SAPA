@@ -10,7 +10,7 @@ class LocalAlerts {
   }
 
   static Future<void> show(SapaNotification item) async {
-    final action = item.type == 'like' ? 'menyukai profilmu' : item.type == 'spark' ? 'mengirim spark' : item.type == 'match' ? 'match denganmu!' : 'mengirim pesan baru';
+    final action = item.type == 'like' ? 'menyukai profilmu' : item.type == 'spark' ? 'mengirim spark' : item.type == 'comment' ? 'mengirim komentar pembuka' : item.type == 'match' ? 'match denganmu!' : 'mengirim pesan baru';
     try {
       await _channel.invokeMethod<void>('show', {
         'id': item.id.hashCode & 0x7fffffff,

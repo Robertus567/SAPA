@@ -8,7 +8,7 @@ import { ArrowLeft, ImagePlus, MoreHorizontal, Reply, Send, ShieldAlert, Sparkle
 import { Brand } from "./brand";
 import type { ChatMessage } from "@/lib/types";
 
-type ChatPeer = { userId: string; matchId: string; fullName: string; mbti: string; photoUrl: string };
+type ChatPeer = { userId: string; matchId: string; isMutual: boolean; fullName: string; mbti: string; photoUrl: string };
 
 type MatchItem = { id: string; conversationId: string; fullName: string; photoUrl: string; lastMessage: string; unread: number };
 
@@ -26,7 +26,7 @@ export function ChatRoom({ conversationId }: { conversationId: string }) {
   const [notice, setNotice] = useState("");
   const [viewerId, setViewerId] = useState("");
   const [viewerMbti, setViewerMbti] = useState("");
-  const [peer, setPeer] = useState<ChatPeer>({ userId: "", matchId: "", fullName: "Memuat percakapan…", mbti: "", photoUrl: "/people/default.svg" });
+  const [peer, setPeer] = useState<ChatPeer>({ userId: "", matchId: "", isMutual: false, fullName: "Memuat percakapan…", mbti: "", photoUrl: "/people/default.svg" });
   const [safetyOpen, setSafetyOpen] = useState(false);
   const [replying, setReplying] = useState<ChatMessage | null>(null);
   const [activeMessage, setActiveMessage] = useState<string | null>(null);
@@ -59,7 +59,7 @@ export function ChatRoom({ conversationId }: { conversationId: string }) {
         }) ? current : data.messages);
         if (data.currentUserId) setViewerId(data.currentUserId);
         if (data.currentUserMbti) setViewerMbti(data.currentUserMbti);
-        if (data.peer) setPeer((current) => current.userId === data.peer.userId && current.fullName === data.peer.fullName && current.photoUrl === data.peer.photoUrl && current.mbti === data.peer.mbti ? current : data.peer);
+        if (data.peer) setPeer((current) => current.userId === data.peer.userId && current.fullName === data.peer.fullName && current.photoUrl === data.peer.photoUrl && current.mbti === data.peer.mbti && current.isMutual === data.peer.isMutual ? current : data.peer);
       } else if (!response.ok) setNotice(data.error || "Percakapan gagal dimuat.");
     } catch { setNotice("Koneksi terputus. Mencoba lagi…"); }
   }, [conversationId]);
@@ -169,7 +169,7 @@ export function ChatRoom({ conversationId }: { conversationId: string }) {
     <aside className="chat-list-panel"><Brand /><div className="chat-list-head"><h1>Pesan</h1><Link href="/app" aria-label="Kembali ke Discover">＋</Link></div><label className="chat-search">⌕ <input value={chatSearch} onChange={(event) => setChatSearch(event.target.value)} placeholder="Cari percakapan" /></label><div className="chat-list-tabs"><button className={!unreadOnly ? "active" : ""} onClick={() => setUnreadOnly(false)}>Semua</button><button className={unreadOnly ? "active" : ""} onClick={() => setUnreadOnly(true)}>Belum dibaca <b>{matches.reduce((sum, item) => sum + item.unread, 0)}</b></button></div>{matches.filter((item) => (!unreadOnly || item.unread > 0) && item.fullName.toLowerCase().includes(chatSearch.toLowerCase())).map((item) => <Link href={`/messages/${item.conversationId}`} className={`conversation ${item.conversationId === conversationId ? "active" : ""}`} key={item.id}><img src={item.photoUrl} alt="" /><div><strong>{item.fullName}</strong><p>{item.lastMessage}</p></div>{item.unread > 0 && <b>{item.unread}</b>}</Link>)}{!matches.length && <p className="match-empty">Belum ada percakapan lain.</p>}</aside>
 
     <section className="chat-main"><header className="chat-header"><Link href="/messages" className="chat-back" aria-label="Kembali ke daftar pesan" title="Kembali ke daftar pesan"><ArrowLeft /></Link><img src={peer.photoUrl} alt={peer.fullName} /><div><h2>{peer.fullName}</h2><p>{peer.mbti} · percakapan pribadi</p></div><div className="chat-tools"><div className="safety-menu-wrap"><button aria-label="Menu keamanan" aria-expanded={safetyOpen} onClick={() => setSafetyOpen(!safetyOpen)}><MoreHorizontal /></button>{safetyOpen && <div className="safety-menu"><button onClick={() => safetyAction("report")}>Laporkan akun</button><button onClick={() => safetyAction("unmatch")}>Batalkan match</button><button className="danger" onClick={() => safetyAction("block")}>Blokir akun</button></div>}</div></div></header>
-      <div className="chat-body"><div className="match-announcement"><div><img src={peer.photoUrl} alt={peer.fullName} /></div><Sparkles /><h3>Kalian match!</h3><p>Mulai percakapan dengan {peer.fullName}.</p></div><div className="date-divider"><span>PESAN</span></div>
+      <div className="chat-body"><div className="match-announcement"><div><img src={peer.photoUrl} alt={peer.fullName} /></div><Sparkles /><h3>{peer.isMutual ? "Kalian match!" : "Sapaan pertama"}</h3><p>{peer.isMutual ? `Mulai percakapan dengan ${peer.fullName}.` : `Komentar pembuka untuk ${peer.fullName} menjadi pesan privat.`}</p></div><div className="date-divider"><span>PESAN</span></div>
         {messages.map((message, index) => { const mine = message.senderId === viewerId; return <div className={`message-row ${mine ? "mine" : "theirs"}`} key={message.id}>{!mine && (index === 0 || messages[index - 1]?.senderId !== message.senderId) && <img src={peer.photoUrl} alt="" />}<div className="message-wrap" onPointerDown={(event) => startLongPress(event, message)} onPointerMove={moveLongPress} onPointerUp={clearLongPress} onPointerLeave={clearLongPress} onPointerCancel={clearLongPress} onContextMenu={(event) => { event.preventDefault(); if (!message.deletedAt) setActiveMessage(message.id); }}>
           {!message.deletedAt && <button type="button" className="message-more" aria-label="Opsi pesan" onClick={() => setActiveMessage(activeMessage === message.id ? null : message.id)}><MoreHorizontal size={15} /></button>}
           {message.replyTo && <div className="message-quote"><strong>{message.replyTo.senderId === viewerId ? "Kamu" : peer.fullName}</strong><span>{message.replyTo.deletedAt ? "Pesan ini telah dihapus" : message.replyTo.hasImage ? `Foto${message.replyTo.body && message.replyTo.body !== "Foto" ? ` · ${message.replyTo.body}` : ""}` : message.replyTo.body}</span></div>}

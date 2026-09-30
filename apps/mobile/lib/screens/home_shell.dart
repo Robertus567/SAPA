@@ -153,6 +153,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
   int current = 0;
   bool loading = true;
   String filter = '';
+  String searchQuery = '';
   String? error;
   Profile? viewer;
 
@@ -163,10 +164,10 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     ApiService.instance.profile().then((value) { if (mounted) setState(() => viewer = value); }).catchError((_) {});
   }
 
-  Future<void> load([String? mbti]) async {
+  Future<void> load([String? mbti, String? query]) async {
     setState(() => loading = true);
     try {
-      final result = await ApiService.instance.discover(mbti: mbti);
+      final result = await ApiService.instance.discover(mbti: mbti, query: query);
       if (mounted) setState(() { profiles = result; error = null; });
     } catch (caught) { if (mounted) setState(() => error = '$caught'); }
     if (mounted) {
@@ -204,6 +205,36 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     } catch (caught) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$caught')));
     }
+  }
+
+  Future<void> openComment(Profile profile) async {
+    String commentBody = '';
+    bool busy = false;
+    String? validationError;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(builder: (dialogContext, update) => AlertDialog(
+        backgroundColor: cream,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+        title: Text('Sapa ${profile.fullName}', style: const TextStyle(fontFamily: 'serif', fontSize: 26)),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Komentarmu menjadi pesan privat dan bisa langsung dibalas di chat.', style: TextStyle(color: Color(0xFF606B7E), fontSize: 14)),
+          const SizedBox(height: 16),
+          TextField(onChanged: (value) => commentBody = value, autofocus: true, maxLength: 500, minLines: 3, maxLines: 5, decoration: InputDecoration(hintText: 'Hai! Aku lihat kita sama-sama suka...', errorText: validationError, border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)))),
+        ]),
+        actions: [TextButton(onPressed: busy ? null : () => Navigator.pop(dialogContext), child: const Text('Batal')), FilledButton.icon(onPressed: busy ? null : () async {
+          if (commentBody.trim().isEmpty) { update(() => validationError = 'Tulis komentar dulu.'); return; }
+          update(() { busy = true; validationError = null; });
+          try {
+            final sentBody = commentBody.trim();
+            final result = await ApiService.instance.comment(profile.id, sentBody);
+            if (!mounted || !dialogContext.mounted) return;
+            Navigator.pop(dialogContext);
+            await Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(match: MatchItem(id: '${result['matchId']}', conversationId: '${result['conversationId']}', userId: profile.id, fullName: profile.fullName, mbti: profile.mbti, photoUrl: profile.photoUrl, lastMessage: sentBody, isMutual: false))));
+          } catch (caught) { if (dialogContext.mounted) update(() { busy = false; validationError = '$caught'; }); }
+        }, icon: const Icon(Icons.chat_bubble_outline_rounded), label: Text(busy ? 'Mengirim…' : 'Kirim & buka chat'))],
+      )),
+    );
   }
 
   void openDetails(Profile profile) {
@@ -250,6 +281,12 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
               icon: const Icon(Icons.favorite_rounded), label: const Text('Kirim like'),
               style: FilledButton.styleFrom(backgroundColor: coral, minimumSize: const Size.fromHeight(52)),
             ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: () { Navigator.pop(sheetContext); openComment(profile); },
+              icon: const Icon(Icons.chat_bubble_outline_rounded), label: const Text('Komentar & sapa'),
+              style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+            ),
           ]),
         ),
       ),
@@ -271,8 +308,8 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                 const SapaBrand(),
                 const Spacer(),
                 IconButton.filledTonal(onPressed: () async {
-                  final query = await showSearch<String?>(context: context, delegate: _ProfileSearch(profiles));
-                  if (query != null && mounted) setState(() { profiles = profiles.where((item) => item.fullName.toLowerCase().contains(query.toLowerCase()) || item.city.toLowerCase().contains(query.toLowerCase())).toList(); current = 0; });
+                  final query = await showSearch<String?>(context: context, delegate: _ProfileSearch());
+                  if (query != null && mounted) { setState(() => searchQuery = query); await load(filter, query); }
                 }, icon: const Icon(Icons.search_rounded)),
                 const SizedBox(width: 4),
                 Stack(
@@ -323,7 +360,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
               height: 36,
               child: ListView(
                 scrollDirection: Axis.horizontal,
-                children: ['', 'INFJ', 'ENFJ', 'INTP', 'ENTP'].map((type) {
+                children: ['', 'INFP', 'ENFP', 'INFJ', 'ENFJ', 'INTJ', 'ENTJ', 'INTP', 'ENTP', 'ISFP', 'ESFP', 'ISFJ', 'ESFJ', 'ISTP', 'ESTP', 'ISTJ', 'ESTJ'].map((type) {
                   final active = filter == type;
                   return Padding(
                     padding: const EdgeInsets.only(right: 7),
@@ -332,7 +369,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                       selected: active,
                       onSelected: (_) {
                         setState(() => filter = type);
-                        load(type);
+                        load(type, searchQuery);
                       },
                       showCheckmark: false,
                       selectedColor: ink,
@@ -348,13 +385,21 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                 }).toList(),
               ),
             ),
+            if (searchQuery.isNotEmpty) Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: InputChip(
+                label: Text('Cari: $searchQuery', overflow: TextOverflow.ellipsis),
+                onDeleted: () { setState(() => searchQuery = ''); load(filter); },
+                deleteIcon: const Icon(Icons.close_rounded, size: 18),
+              ),
+            ),
             const SizedBox(height: 13),
             SizedBox(
               height: MediaQuery.sizeOf(context).height < 730 ? 390 : MediaQuery.sizeOf(context).height - 340,
               child: AnimatedOpacity(
                 opacity: loading ? .62 : 1,
                 duration: const Duration(milliseconds: 220),
-                child: profile == null ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(loading ? Icons.hourglass_empty_rounded : Icons.auto_awesome_rounded, size: 46, color: violet), const SizedBox(height: 12), Text(loading ? 'Mencari teman baru…' : error ?? 'Semua profil sudah kamu lihat', textAlign: TextAlign.center, style: const TextStyle(fontFamily: 'serif', fontSize: 20)), const SizedBox(height: 8), TextButton(onPressed: () => load(filter), child: const Text('Muat ulang'))])) : ProfileCard(profile: profile, onOpen: () => openDetails(profile)),
+                child: profile == null ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(loading ? Icons.hourglass_empty_rounded : Icons.auto_awesome_rounded, size: 46, color: violet), const SizedBox(height: 12), Text(loading ? 'Mencari teman baru…' : error ?? (searchQuery.isNotEmpty ? 'Profil tidak ditemukan. Profilmu sendiri tidak muncul di Discover.' : 'Semua profil sudah kamu lihat'), textAlign: TextAlign.center, style: const TextStyle(fontFamily: 'serif', fontSize: 20)), const SizedBox(height: 8), TextButton(onPressed: () { setState(() { filter = ''; searchQuery = ''; }); load(); }, child: const Text('Muat ulang semua profil'))])) : ProfileCard(profile: profile, onOpen: () => openDetails(profile)),
               ),
             ),
             Padding(
@@ -377,10 +422,10 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                   ),
                   const SizedBox(width: 15),
                   ActionCircle(
-                    icon: Icons.bolt_rounded,
+                    icon: Icons.chat_bubble_outline_rounded,
                     color: const Color(0xFF58711B),
                     background: lime,
-                    onTap: () => like(superLike: true),
+                    onTap: () { if (profile != null) openComment(profile); },
                   ),
                 ],
               ),
@@ -872,13 +917,13 @@ class _MatchesScreenState extends State<MatchesScreen> {
               ).textTheme.headlineMedium?.copyWith(fontSize: 34),
             ),
             const Text(
-              'Lanjutkan obrolan yang terasa nyambung.',
+              'Lanjutkan obrolan dari match atau sapaan.',
               style: TextStyle(color: Color(0xFF6C7486), fontSize: 12),
             ),
             const SizedBox(height: 20),
             if (error != null) Text(error!, style: const TextStyle(color: Colors.red)),
             Expanded(
-              child: loading ? const Center(child: CircularProgressIndicator()) : matches.isEmpty ? const Center(child: Text('Belum ada match. Mulai dengan satu like yang tulus ♡', textAlign: TextAlign.center)) : RefreshIndicator(onRefresh: load, child: ListView.separated(
+              child: loading ? const Center(child: CircularProgressIndicator()) : matches.isEmpty ? const Center(child: Text('Belum ada obrolan. Kirim like atau komentar pembuka ♡', textAlign: TextAlign.center)) : RefreshIndicator(onRefresh: load, child: ListView.separated(
                 itemCount: matches.length,
                 separatorBuilder: (_, __) => const SizedBox(height: 8),
                 itemBuilder: (_, index) {
@@ -1234,10 +1279,8 @@ class Interest extends StatelessWidget {
 }
 
 class _ProfileSearch extends SearchDelegate<String?> {
-  _ProfileSearch(this.profiles);
-  final List<Profile> profiles;
   @override
-  String get searchFieldLabel => 'Cari nama atau kota';
+  String get searchFieldLabel => 'Cari nama, kota, MBTI, minat';
   @override
   List<Widget> buildActions(BuildContext context) => [IconButton(onPressed: () => query = '', icon: const Icon(Icons.clear_rounded))];
   @override
@@ -1246,8 +1289,14 @@ class _ProfileSearch extends SearchDelegate<String?> {
   Widget buildResults(BuildContext context) => _results(context);
   @override
   Widget buildSuggestions(BuildContext context) => _results(context);
-  Widget _results(BuildContext context) {
-    final found = profiles.where((item) => item.fullName.toLowerCase().contains(query.toLowerCase()) || item.city.toLowerCase().contains(query.toLowerCase())).take(8).toList();
-    return ListView(children: [for (final item in found) ListTile(leading: CircleAvatar(child: ClipOval(child: ProfileImage(item.photoUrl))), title: Text(item.fullName), subtitle: Text('${item.mbti} · ${item.city}'), onTap: () => close(context, query))]);
-  }
+  Widget _results(BuildContext context) => FutureBuilder<List<Profile>>(
+    future: ApiService.instance.discover(query: query),
+    builder: (context, snapshot) {
+      if (!snapshot.hasData && !snapshot.hasError) return const Center(child: CircularProgressIndicator());
+      if (snapshot.hasError) return Center(child: Text('${snapshot.error}', textAlign: TextAlign.center));
+      final found = snapshot.data ?? [];
+      if (found.isEmpty) return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(query.isEmpty ? 'Belum ada profil tersedia.' : 'Tidak ada profil yang cocok. Profilmu sendiri tidak muncul di Discover.', textAlign: TextAlign.center)));
+      return ListView(children: [for (final item in found) ListTile(leading: CircleAvatar(child: ClipOval(child: ProfileImage(item.photoUrl))), title: Text(item.fullName), subtitle: Text('${item.mbti} · ${item.city}'), onTap: () => close(context, item.fullName))]);
+    },
+  );
 }

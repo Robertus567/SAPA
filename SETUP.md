@@ -30,9 +30,10 @@ Untuk **database Neon yang sudah berisi akun/chat**, jalankan migrasi aditif ber
 
 ```powershell
 npm run db:migrate
+npm run db:migrate:intro
 ```
 
-Migrasi menambah kolom referensi balasan dan penanda pesan dihapus. Pada Neon project SAPA yang dipakai pengembangan, migrasi ini sudah dijalankan; jalankan lagi hanya bila menggunakan database lain. Jangan jalankan `db:setup` lagi untuk upgrade.
+Migrasi pertama menambah kolom referensi balasan dan penanda pesan dihapus. Migrasi kedua membedakan komentar pembuka dari match mutual tanpa menghapus chat lama. Pada Neon project SAPA yang dipakai pengembangan, keduanya sudah dijalankan; jalankan lagi hanya bila menggunakan database lain. Jangan jalankan `db:setup` lagi untuk upgrade.
 
 Akun seed untuk menguji mutual match/chat:
 
@@ -60,10 +61,10 @@ Tanpa API key atau saat layanan sibuk, bio/icebreaker/balasan tetap punya fallba
    - `GEMINI_MODEL=gemini-3.8-flash`
    - `APP_URL=https://sapa-rpl-mbti.vercel.app`
    Jangan menambahkan prefix `NEXT_PUBLIC_` pada rahasia apa pun. `DATABASE_URL` adalah pooled connection string yang sama dari Neon; tempel **nilainya**, bukan nama variabelnya.
-4. Jika database masih kosong, jalankan `npm run db:setup` **sekali** dari `apps/web` setelah `.env.local` terisi. Jika sudah berisi data, jalankan `npm run db:migrate` untuk skema chat baru.
+4. Jika database masih kosong, jalankan `npm run db:setup` **sekali** dari `apps/web` setelah `.env.local` terisi. Jika sudah berisi data, jalankan `npm run db:migrate` dan `npm run db:migrate:intro` untuk skema chat baru.
 5. Push ke branch `main` atau klik Deploy pada commit terbaru. Periksa deployment baru, bukan URL deployment lama yang berstatus *Stale*.
 
-Chat, balasan berkutip, penghapusan pesan, dan notifikasi disimpan di Neon yang sama untuk web dan APK, lalu disegarkan berkala (polling). Saat layar aktif, chat diperiksa sekitar tiap 2 detik dan aktivitas lain sekitar tiap 5 detik; ini mendekati waktu nyata, bukan WebSocket/push instan. Penghapusan untuk semua orang hanya boleh oleh pengirim; kutipan pesan yang dihapus berubah menjadi penanda penghapusan. Tidak perlu server WebSocket persisten.
+Chat, komentar pembuka, balasan berkutip, penghapusan pesan, dan notifikasi disimpan di Neon yang sama untuk web dan APK, lalu disegarkan berkala (polling). Saat layar aktif, chat diperiksa sekitar tiap 2 detik dan aktivitas lain sekitar tiap 5 detik; ini mendekati waktu nyata, bukan WebSocket/push instan. Komentar membuka chat privat tetapi belum dihitung sebagai match sampai kedua orang saling like. Penghapusan untuk semua orang hanya boleh oleh pengirim; kutipan pesan yang dihapus berubah menjadi penanda penghapusan. Tidak perlu server WebSocket persisten.
 
 ## 5. Menjalankan Flutter
 
@@ -86,7 +87,7 @@ Hasilnya berada di `apps/mobile/build/app/outputs/flutter-apk/app-release.apk`. 
 
 Repository menyertakan `release/SAPA-android-preview.apk`, yaitu build yang diarahkan ke deployment Vercel SAPA. APK bertanda tangan debug untuk instalasi tugas/uji pribadi, **bukan** distribusi Play Store. Web harus sudah menjalankan backend terbaru sebelum aplikasi mobile dapat memakai endpoint notifikasi.
 
-Notifikasi like/match/pesan tersimpan di inbox web dan APK. Android juga menampilkan notifikasi sistem untuk aktivitas baru selama proses aplikasi masih berjalan dan izin notifikasi diberikan. Push saat aplikasi **tertutup total** memerlukan integrasi FCM/Firebase dan konfigurasi project Android tambahan; fitur itu belum disiapkan.
+Notifikasi like/komentar/match/pesan tersimpan di inbox web dan APK. Android juga menampilkan notifikasi sistem untuk aktivitas baru selama proses aplikasi masih berjalan dan izin notifikasi diberikan. Push saat aplikasi **tertutup total** memerlukan integrasi FCM/Firebase dan konfigurasi project Android tambahan; fitur itu belum disiapkan.
 
 Uji alur backend dua akun tanpa menyisakan akun uji: jalankan `npm run build`, `npm run start`, lalu `node scripts/smoke-flow.mjs` dari `apps/web`. Script otomatis menghapus dua akun yang dibuatnya.
 
